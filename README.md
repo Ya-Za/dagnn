@@ -14,6 +14,14 @@ Before starting the installation program,
 * For Linux, make sure you have GCC 4.8 and LibJPEG are installed. To install LibJPEG in and Ubuntu/Debian-like distributions use: sudo apt-get install build-essential libjpeg-turbo8-dev For Fedora/Centos/RedHat-like distributions use instead: sudo yum install gcc gcc-c++ libjpeg-turbo-devel Older versions of GCC (e.g. 4.7) are not compatible with the C++ code in MatConvNet.
 * For Windows, make sure you have Visual Studio 2015 or greater installed.
 
+Also, make sure the following Matlab toolboxes are installed:
+* Signal Processing Toolbox
+* DSP System Toolbox
+* Parallel Computing Toolbox
+* Communications System Toolbox
+* Bioinformatics Toolbox
+* Statistics and Machine Learning Toolbox
+
 ## Installation
 
 To install, run 'setup.m' in the directory where you want to install the program. The output will let you know whether you will need any additional toolboxes.
