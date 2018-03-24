@@ -1,27 +1,37 @@
 classdef Viz < handle
     %Visualize a 'DagNN'
     
-    % Filename
+    % Files & Folders
     properties (Constant)
         % Properties
         % ----------
-        % - DATA_FILENAME: char vector
-        %   Data filename
+        % - EPOCHS_DIR: char vector
+        %   Epochs directory
+        % - VIDEOS_DIR: char vector
+        %   Videos directory
         % - CONFIG_FILENAME: char vector
         %   Config filename
-        % - DATA_INDEXES_FILENAME: char vector
-        %   Data indexes filename
         % - COSTS_FILENAME: char vector
         %   Costs filename
+        % - DATA_FILENAME: char vector
+        %   Data filename
+        % - DATA_INDEXES_FILENAME: char vector
+        %   Data indexes filename
+        % - PARAMS_EXPECTED_FILENAME: char vector
+        %   Expected parameters filename
+        % - PARAMS_INITIAL_FILENAME: char vector
+        %   Initial parameters filename
         
-        DATA_FILENAME = 'data.mat';
-        CONFIG_FILENAME = 'config.json';
-        DATA_INDEXES_FILENAME = 'data-indexes.mat';
-        COSTS_FILENAME = 'costs.mat';
+        EPOCHS_DIR = 'epochs';
         VIDEOS_DIR = 'vidoes';
+        
+        CONFIG_FILENAME = 'config.json';
+        
+        COSTS_FILENAME = 'costs.mat';
+        DATA_FILENAME = 'data.mat';
+        DATA_INDEXES_FILENAME = 'data-indexes.mat';
         PARAMS_EXPECTED_FILENAME = 'params-expected';
         PARAMS_INITIAL_FILENAME = 'params-initial';
-        EPOCHS_DIR = 'epochs';
     end
     
     % Plot
@@ -34,6 +44,14 @@ classdef Viz < handle
         %   Color of stimulus
         % - RESP_COLOR: color
         %   Color of response
+        % - TRAIN_COLOR: color
+        %   Color of training set
+        % - VAL_COLOR: color
+        %   Color of validation set
+        % - TEST_COLOR: color
+        %   Color of test set
+        % - NO_COLOR: color
+        %   Color of nothing!
         % - XLABEL: char vector
         %   X label is same for `stimului` and `responses`
         % - STIM_YLABEL: char vector
@@ -48,23 +66,29 @@ classdef Viz < handle
         %   Rounds to N digits
         
         DT = 0.001;
+        
         STIM_COLOR = [0, 0.4470, 0.7410];
         RESP_COLOR = [0.8500, 0.3250, 0.0980];
         TRAIN_COLOR = [0, 0.4470, 0.7410];
         VAL_COLOR = [0.4660, 0.6740, 0.1880];
         TEST_COLOR = [0.8500, 0.3250, 0.0980];
         NO_COLOR = [1, 1, 1];
+        
         XLABEL = 'Time (s)';
         STIM_YLABEL = 'Intensity';
         RESP_YLABEL = 'Rate (Hz)';
         STIM_TITLE = 'Stimulus';
         RESP_TITLE = 'Response';
+        
         ROUND_DIGITS = 3;
     end
     
+    % Data
     properties
         % Properties
         % ----------
+        % - path: char vector
+        %   Path of root directory
         % - X: cell array
         %   Stimulus set
         % - Y: cell array
@@ -94,8 +118,18 @@ classdef Viz < handle
         %       'test', double vector ...
         %   )
         %   Contains 'train', 'val' and 'test' costs
+        % - paramNames: cell array
+        %   Name of parameters
+        % - params: struct(...
+        %       'name', struct(...
+        %           'expected', double array, ...
+        %           'initial', double array, ...
+        %           'history', cell array ...
+        %   )
+        %   Expected, initial and history of parameters
         
         path
+        config
         X
         Y
         N
@@ -120,6 +154,9 @@ classdef Viz < handle
             
             obj.path = path;
             
+            % load config file
+            obj.config = jsondecode(fileread(fullfile(obj.path, Viz.CONFIG_FILENAME)));
+            
             % data
             data = load(fullfile(path, Viz.DATA_FILENAME));
             obj.X = data.x;
@@ -130,15 +167,15 @@ classdef Viz < handle
             obj.stimulus = vertcat(obj.X{:});
             obj.response = vertcat(obj.Y{:});
             
-            obj.initLearningParams(path);
-            obj.initDataIndexes(path);
+            obj.initLearningParams();
+            obj.initDataIndexes();
             
             obj.costs = load(fullfile(path, Viz.COSTS_FILENAME));
             
-            obj.initParamNames(path);
-            obj.initParams(path);
+            obj.initParamNames();
+            obj.initParams();
         end
-        function initLearningParams(obj, path)
+        function initLearningParams(obj)
             % Init `learningParams` property
             %
             % Parameters
@@ -146,18 +183,15 @@ classdef Viz < handle
             % - path: char vector
             %   Path of data directory
             
-            % load config file
-            config = jsondecode(fileread(fullfile(path, Viz.CONFIG_FILENAME)));
-            
             % learning parameters
             obj.learningParams = struct(...
-                'trainValTestRatios', config.learning.train_val_test_ratios, ...
-                'learningRate', config.learning.learning_rate, ...
-                'batchSize', config.learning.batch_size, ...
-                'numberOfEpochs', config.learning.number_of_epochs ...
+                'trainValTestRatios', obj.config.learning.train_val_test_ratios, ...
+                'learningRate', obj.config.learning.learning_rate, ...
+                'batchSize', obj.config.learning.batch_size, ...
+                'numberOfEpochs', obj.config.learning.number_of_epochs ...
             );
         end
-        function initDataIndexes(obj, path)
+        function initDataIndexes(obj)
             % Init `dataIndexes` property
             %
             % Parameters
@@ -167,24 +201,21 @@ classdef Viz < handle
             
             % load shuffled data indexes
             obj.dataIndexes = load(...
-                fullfile(path, Viz.DATA_INDEXES_FILENAME) ...
+                fullfile(obj.path, Viz.DATA_INDEXES_FILENAME) ...
             );
         end
-        function initParamNames(obj, path)
-            % load config file
-            config = jsondecode(fileread(fullfile(path, Viz.CONFIG_FILENAME)));
-            
+        function initParamNames(obj)
             % parameters names
-            obj.paramNames = {config.net.params.name};
+            obj.paramNames = {obj.config.net.params.name};
         end
-        function initParams(obj, path)
+        function initParams(obj)
             initParmsExpected();
             initParamsInitial();
             initParamsHistory();
             
             % Local Functions
             function initParmsExpected()
-                paramsExpected = load(fullfile(path, Viz.PARAMS_EXPECTED_FILENAME));
+                paramsExpected = load(fullfile(obj.path, Viz.PARAMS_EXPECTED_FILENAME));
                 
                 for i = 1:length(obj.paramNames)
                     paramName = obj.paramNames{i};
@@ -192,7 +223,7 @@ classdef Viz < handle
                 end
             end
             function initParamsInitial()
-                paramsInitial = load(fullfile(path, Viz.PARAMS_INITIAL_FILENAME));
+                paramsInitial = load(fullfile(obj.path, Viz.PARAMS_INITIAL_FILENAME));
                 
                 for i = 1:length(obj.paramNames)
                     paramName = obj.paramNames{i};
@@ -201,7 +232,7 @@ classdef Viz < handle
             end
             function initParamsHistory()
                 % filenames of saved 'epoch' files
-                epochsDir = fullfile(path, Viz.EPOCHS_DIR);
+                epochsDir = fullfile(obj.path, Viz.EPOCHS_DIR);
                 filenames = dir(fullfile(epochsDir, '*.mat'));
                 filenames = {filenames.name};
                 
@@ -220,6 +251,176 @@ classdef Viz < handle
                     end
                 end
             end
+        end
+    end
+    
+    % Draw Network
+    methods
+        function dg = makeDigraph(obj)
+            % Make a directed-graph based on `config.json` file
+            %
+            % Returns
+            % - dg : digraph
+            %   Directed graph
+            
+            layers = obj.config.net.layers';
+            
+            % add layers to digraph
+            dg = digraph();
+            for layer = layers
+                block = sprintf('%s(%s)', layer.name, layer.type);
+                % block = layer.type;
+                
+                % add edges
+                % - inputs, block
+                for x = layer.inputs'
+                    dg = addedge(dg, x, block);
+                end
+                % - params, block
+                if ~isempty(layer.params)
+                    if ~isempty(strfind(layer.type, '+'))
+                        % parms = {{'p1', 'p2'}, []} -> params = {'p1', 'p2'}
+                        layer.params = [layer.params{:}];
+                    end
+                end
+                for w = layer.params'
+                    dg = addedge(dg, w, block);
+                end
+                % - block, outputs
+                for y = layer.outputs'
+                    dg = addedge(dg, block, y);
+                end
+            end
+        end
+        function nodes = getNodes(obj)
+            net = obj.config.net;
+            nodes = struct();
+            
+            % input
+            nodes.input = net.vars.input.name;
+            % output
+            nodes.output = net.vars.output.name;
+            % expected output
+            nodes.expectedOutput = net.vars.expected_output.name;
+            % cose
+            nodes.cost = net.vars.cost.name;
+            % params
+            nodes.params = {net.params.name};
+            % layers, blocks
+            nodes.layers = {};
+            nodes.blocks = {};
+            for layer = net.layers'
+                nodes.layers = {nodes.layers{:}, layer.outputs{:}};
+                nodes.blocks{end + 1} = sprintf('%s(%s)', layer.name, layer.type);
+            end
+        end
+        function plotNet(obj)
+            % Plot a directed-graph based on `config.json` file
+            
+            squareSize = 50;
+            circleSize = 7;
+            fontSize = 11;
+            dataColor = [0.8500, 0.3250, 0.0980];
+            paramsColor = [0.4660, 0.6740, 0.1880];
+            layersColor = [0, 0.4470, 0.7410];
+            outputColor = [0.6350, 0.0780, 0.1840];
+            costColor = [0.4940, 0.1840, 0.5560];
+            
+            % make digraph
+            dg = obj.makeDigraph();
+            
+            % nodes
+            nodes = obj.getNodes();
+            
+            % figure
+            Viz.figure('Net');
+        
+            % node labels
+            labels = {};
+            %   name(type) -> type
+            expression = '\w+\((?<type>[\+\w]+)\)';
+            for name = dg.Nodes.Name'
+                token_names = regexp(char(name), expression, 'names');
+                if isempty(token_names)
+                    labels{end + 1} = char(name);
+                else
+                    labels{end + 1} = token_names.type;
+                end
+            end
+            
+            % plot graph
+            h = plot(dg, 'NodeLabel', labels);
+
+            % title
+            title('Structure of Network');
+            
+            % layout
+            layout(h, 'layered', ...
+                'Direction', 'right', ...
+                'Sources', nodes.input, ...
+                'Sinks', nodes.cost, ...
+                'AssignLayers', 'asap' ...
+            );
+        
+            % font
+%             nl = h.NodeLabel;
+%             h.NodeLabel = '';
+%             xData = get(h, 'XData');
+%             yData = get(h, 'YData');
+%             yData = yData - 0.2;
+%             text(...
+%                 xData, ...
+%                 yData, ...
+%                 nl, ...
+%                 'FontSize', fontSize, ...
+%                 'FontWeight', 'bold', ...
+%                 'HorizontalAlignment', 'center', ...
+%                 'VerticalAlignment', 'top' ...
+%             );
+            
+            % highlight
+            % - data = (input, expected output)
+            highlight(h, ...
+                {nodes.input, nodes.expectedOutput}, ...
+                'NodeColor', dataColor, ...
+                'MarkerSize', circleSize ...
+            );
+            % - parameters
+            highlight(h, ...
+                nodes.params, ...
+                'NodeColor', paramsColor, ...
+                'MarkerSize', circleSize ...
+            );
+            % - layers
+            highlight(h, ...
+                nodes.layers, ...
+                'NodeColor', layersColor, ...
+                'MarkerSize', circleSize ...
+            );
+            % - blocks
+            highlight(h, ...
+                nodes.blocks, ...
+                'Marker', 's', ...
+                'MarkerSize', squareSize ...
+            );
+            % - output
+            highlight(h, ...
+                nodes.output, ...
+                'NodeColor', outputColor, ...
+                'MarkerSize', circleSize ...
+            );
+            % - cost
+            highlight(h, ...
+                nodes.cost, ...
+                'NodeColor', costColor, ...
+                'MarkerSize', circleSize ...
+            );
+
+            % hide axes
+            set(h.Parent, ...
+                'XTick', [], ...
+                'YTick', [] ...
+            );
         end
     end
     
@@ -860,6 +1061,13 @@ classdef Viz < handle
     end
         
     % Utils
+    methods
+        function config = readConfig(obj)
+            config = jsondecode(fileread(...
+                fullfile(obj.path, obj.CONFIG_FILENAME)...
+            ));
+        end
+    end
     methods (Static)
         function h = figure(name)
             % Create `full screen` figure
