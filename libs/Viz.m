@@ -212,6 +212,7 @@ classdef Viz < handle
             initParmsExpected();
             initParamsInitial();
             initParamsHistory();
+            initMinValCost();
             
             % Local Functions
             function initParmsExpected()
@@ -249,6 +250,17 @@ classdef Viz < handle
                         obj.params.(paramName).history{i} = ...
                             epochParams(paramIndexes.(paramName)).value;
                     end
+                end
+            end
+            function initMinValCost()
+                for i = 1:length(obj.paramNames)
+                    paramName = obj.paramNames{i};
+                    
+                    [value, index] = min(obj.costs.val);
+                    obj.params.(paramName).minValCost = struct(...
+                        'index', index, ...
+                        'value', value ...
+                    );
                 end
             end
         end
@@ -1057,6 +1069,105 @@ classdef Viz < handle
             end
             
             limits = [xMin, xMax, yMin, yMax];
+        end
+        
+        function plotFilterHistory(obj, filterName, epochs)
+            % Plot evolution history of a filter during the learning 
+            % process in a grid
+            %
+            % Parameters
+            % ----------
+            % - filterName: char vector
+            %   Name of the filter
+            
+            % properties
+            fontsize = 6;
+            expectedColor = Viz.VAL_COLOR;
+            expectedLineWidth = 1.5;
+            minValCostColor = Viz.TEST_COLOR;
+            minValCostLineWidth = 1.5;
+            
+            % default values
+            if ~exist('epochs', 'var')
+                epochs = 1:length(obj.params.(filterName).history());
+            end
+            
+            % history
+            x = obj.params.(filterName).history();
+            
+            % number of samples
+            numberOfSamples = length(epochs);
+            
+            % subplot grid
+            [cols, rows] = getColsRows(numberOfSamples);
+            
+            % figure
+            Viz.figure(sprintf('Filter History - %s', filterName));
+            
+            % plot
+            limits = obj.getFilterLimits(filterName);
+            hWaitbar = waitbar(0, 'Plot Filter History...');
+            
+            minValCostIndex = obj.params.(filterName).minValCost.index;
+            for sampleIndex = 1 : numberOfSamples
+                epoch = epochs(sampleIndex);
+                % sample
+                subplot(rows, cols, sampleIndex);
+                h = plot(x{epoch});
+                
+                % expected
+                if epoch == 1
+                    hold('on');
+                    plot(obj.params.(filterName).expected, ...
+                        'Color', expectedColor, ...
+                        'LineWidth', expectedLineWidth);
+                    hold('off');
+                end
+                
+                % red sample
+                if epoch == minValCostIndex
+                   set(h, ...
+                       'Color', minValCostColor, ...
+                       'LineWidth', minValCostLineWidth ...
+                   ); 
+                end
+                
+                setAxis();
+                showTitle(epoch);
+                
+                waitbar(sampleIndex / numberOfSamples)
+            end
+            close(hWaitbar);
+            
+            % super-title
+            suptitle(...
+                sprintf(...
+                    'Learning History of Parameter %s', ...
+                    filterName ...
+                ) ...
+            );
+            
+            % Local Functions
+            function [cols, rows] = getColsRows(n)
+                % cols > rows
+                % - cols
+                cols = ceil(sqrt(n));
+                % - rows
+                rows = ceil(n / cols);
+            end
+            function setAxis()
+                axis(limits);
+                
+                ax = gca;
+                ax.XAxisLocation = 'origin';
+                ax.YAxis.Visible = 'off'; 
+                
+                Viz.hideticks();
+            end
+            function showTitle(i)
+                title(num2str(i - 1));
+                set(gca, 'FontSize', fontsize);
+            end
         end
     end
         
