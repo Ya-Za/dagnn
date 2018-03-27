@@ -438,13 +438,33 @@ classdef Viz < handle
     
     % Plot Data
     methods
-        function plotData(obj, numberOfSamples)
+        function plotData(obj, indexes)
             % Plot first stim/resp samples in a grid pattern
             %
             % Parameters
             % ----------
             % - numberOfSamples: int = 50
             %   Number of samples (stim/res)
+            
+            % plot each `n` epochs in a new figure
+            if ~exist('indexes', 'var')
+                n = 50; % number of epochs in each figure
+                s = 1; % stard epoch
+                f = n; % finish epoch
+                
+                while s < obj.N
+                    if f > obj.N
+                        f = obj.N;
+                    end
+                    
+                    obj.plotData(s:f);
+                    
+                    s = s + n;
+                    f = f + n;
+                end
+                
+                return;
+            end
             
             % properties
             fontsize = 6;
@@ -461,11 +481,7 @@ classdef Viz < handle
             Viz.figure('Data');
         
             % number of samples
-            if ~exist('numberOfSamples', 'var')
-                numberOfSamples = min(50, obj.N);
-            else
-                numberOfSamples = min(numberOfSamples, obj.N);
-            end
+            numberOfSamples = length(indexes);
             
             % subplot grid
             [rows, cols, numberOfSamples] = getColsRows(numberOfSamples);
@@ -492,7 +508,7 @@ classdef Viz < handle
             % super-title
             suptitle(...
                 sprintf(...
-                    'First %d of %d Paird (Stimulous, Response) Samples', ...
+                    '%d of %d Paird (Stimulous, Response) Samples', ...
                     numberOfSamples, ...
                     obj.N ...
                 ) ...
@@ -517,18 +533,21 @@ classdef Viz < handle
                 axis(limits);
                 set(gca, 'XAxisLocation', 'origin');
                 Viz.hideticks();
+                
+                ax = gca;
+                ax.YAxis.Visible = 'off';
             end
             function plotStimulus(i)
                 subplot(rows, cols, 2 * (i - 1) + 1);
-                plot(obj.X{i}, 'Color', Viz.STIM_COLOR);
-                title(num2str(i));
+                plot(obj.X{indexes(i)}, 'Color', Viz.STIM_COLOR);
+                title(num2str(indexes(i)));
                 setTinyFontSize();
                 
                 setAxis();
             end
             function plotResponse(i)
                 subplot(rows, cols, 2 * i);
-                plot(obj.Y{i}, 'Color', Viz.RESP_COLOR);
+                plot(obj.Y{indexes(i)}, 'Color', Viz.RESP_COLOR);
                 
                 setAxis();
             end
@@ -539,6 +558,9 @@ classdef Viz < handle
                 xlabel(Viz.XLABEL);
                 ylabel(Viz.STIM_YLABEL);
                 
+                ax = gca;
+                ax.YAxis.Visible = 'on';
+                
                 setTinyFontSize();
             end
             function plotFirstResponse()
@@ -547,6 +569,9 @@ classdef Viz < handle
                 title(Viz.RESP_TITLE);
                 xlabel(Viz.XLABEL);
                 ylabel(Viz.RESP_YLABEL);
+                
+                ax = gca;
+                ax.YAxis.Visible = 'on';
                 
                 setTinyFontSize();
             end
@@ -1115,7 +1140,7 @@ classdef Viz < handle
             if ~exist('epochs', 'var')
                 n = 100; % number of epochs in each figure
                 s = 1; % stard epoch
-                f = 100; % finish epoch
+                f = n; % finish epoch
                 
                 while s < numberOfEpochs
                     if f > numberOfEpochs
