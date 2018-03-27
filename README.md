@@ -29,7 +29,7 @@ Also, make sure the following Matlab toolboxes are installed:
 
 ## Installation
 
-To install, run [``setup.m``](https://github.com/Ya-Za/dagnn/raw/master/setup.m) in the directory where you want to install the program. The output will let you know whether you will need any additional toolboxes.
+To install, run <a href="https://github.com/Ya-Za/dagnn/raw/master/setup.m" download>``setup.m``</a>in the directory where you want to install the program. The output will let you know whether you will need any additional toolboxes.
 
 ## Execution
 
