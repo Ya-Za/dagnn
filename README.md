@@ -45,9 +45,11 @@ To run the program, run the file `DagNNNoisy.m` using the following command
 
 The paths for the parameters and data are specified as variables atop `DagNNNoisy.m`. The parameters can be changed by modifying the json files to be read, while the data can be modified by creating new data `.mat` files.
 
-## Setting Up Utah Center For High Performance Computing (CHPC) Account
+## Setting Up a University of Utah CHPC Account (optional)
 
-Alternatively, one can create a CHPC account to run the program. To do so, please follow the following link for instructions. Once logged into a CHPC server, perform steps in [Installation section](## Installation) to install. Then execute.
+Alternatively, one can create a Center For High Performance Computing (CHPC) account to run the program on Utah CHPC servers. To do so, please [click here](https://www.chpc.utah.edu/userservices/accounts.php) for instructions.
+
+Once logged into a CHPC server, perform steps in [Installation section](#Installation) to install. Then execute.
 
 ## Contributors
 
