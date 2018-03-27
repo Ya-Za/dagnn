@@ -3,13 +3,10 @@
 
 The project focuses on trying to design an artificial neural network architecture capable of learning and replicating a noisy 1D signal. The goal is to be able to replicate the behavior of the retina's neural layers using an artificial neural network.  
 
-The motivation behind the project stems from the retina's neural layers, which have proven to be extremely effecient at processing visual input. As explained in [1], 
-> in only three layers
-of cells, the retina compresses the entire visual scene into the sparse responses of only a million output cells.
+The motivation behind the project stems from the retina's neural layers, which have proven to be extremely effecient at processing visual input. As explained in [1], "in only three layers
+of cells, the retina compresses the entire visual scene into the sparse responses of only a million output cells."
 
-Notwithstanding its deceptive simplicity, 
-
-> the retina performs a wide range of nonlinear computations, including object motion detection, adaptation to complex spatiotemporal patterns, encoding spatial structure as spike latency.   
+Notwithstanding its deceptive simplicity, "the retina performs a wide range of nonlinear computations, including object motion detection, adaptation to complex spatiotemporal patterns, encoding spatial structure as spike latency."  
 
 ## Prerequisites
 
