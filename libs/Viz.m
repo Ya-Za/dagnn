@@ -913,12 +913,27 @@ classdef Viz < handle
         function playFilterVideo(obj, filterName)
             % Play or save video of learning process of the specific filter
             
+            % play all filters
+            if ~exist('filterName', 'var')
+                for i = 1:length(obj.paramNames)
+                    paramName = obj.paramNames{i};
+                    
+                    % filter names start with `w`
+                    if paramName(1) == 'w'
+                        obj.playFilterVideo(paramName);
+                    end
+                end
+                
+                return;
+            end
+            
             filterVideoFilename = obj.getFilterVideoFilename(filterName);
             if ~exist(filterVideoFilename, 'file')
                 obj.saveFilterVideo(filterName, filterVideoFilename);
             end
             
             Viz.playVideo(filterVideoFilename);
+            fprintf('Video path: ''%s\''', filterVideoFilename);
         end
         function filterVideoFilename = getFilterVideoFilename(obj, filterName)
             filterVideoFilename = fullfile(...
@@ -1080,6 +1095,42 @@ classdef Viz < handle
             % - filterName: char vector
             %   Name of the filter
             
+            % plot for all filters
+            if ~exist('filterName', 'var')
+                for i = 1:length(obj.paramNames)
+                    paramName = obj.paramNames{i};
+                    
+                    % filter names start with `w`
+                    if paramName(1) == 'w'
+                        obj.plotFilterHistory(paramName);
+                    end
+                end
+                
+                return;
+            end
+            
+            numberOfEpochs = length(obj.params.(filterName).history());
+            
+            % plot each `n` epochs in a new figure
+            if ~exist('epochs', 'var')
+                n = 100; % number of epochs in each figure
+                s = 1; % stard epoch
+                f = 100; % finish epoch
+                
+                while s < numberOfEpochs
+                    if f > numberOfEpochs
+                        f = numberOfEpochs;
+                    end
+                    
+                    obj.plotFilterHistory(filterName, s:f);
+                    
+                    s = s + n;
+                    f = f + n;
+                end
+                
+                return;
+            end
+            
             % properties
             fontsize = 6;
             expectedColor = Viz.VAL_COLOR;
@@ -1089,7 +1140,7 @@ classdef Viz < handle
             
             % default values
             if ~exist('epochs', 'var')
-                epochs = 1:length(obj.params.(filterName).history());
+                epochs = 1:numberOfEpochs;
             end
             
             % history
