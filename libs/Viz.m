@@ -448,20 +448,7 @@ classdef Viz < handle
             
             % plot each `n` epochs in a new figure
             if ~exist('indexes', 'var')
-                n = 50; % number of epochs in each figure
-                s = 1; % stard epoch
-                f = n; % finish epoch
-                
-                while s < obj.N
-                    if f > obj.N
-                        f = obj.N;
-                    end
-                    
-                    obj.plotData(s:f);
-                    
-                    s = s + n;
-                    f = f + n;
-                end
+                plotDataAll();
                 
                 return;
             end
@@ -515,6 +502,22 @@ classdef Viz < handle
             );
         
             % Local Functions
+            function plotDataAll()
+                n = 50; % number of epochs in each figure
+                s = 1; % stard epoch
+                f = n; % finish epoch
+                
+                while s < obj.N
+                    if f > obj.N
+                        f = obj.N;
+                    end
+                    
+                    obj.plotData(s:f);
+                    
+                    s = s + n;
+                    f = f + n;
+                end
+            end
             function [rows, cols, n] = getColsRows(n)
                 % number of plots = 2 * number of samples(stim/resp)
                 n = 2 * n;
@@ -967,6 +970,103 @@ classdef Viz < handle
                 [filterName, '.mp4'] ...
             );
         end
+        function plotFilter(obj, filterName)
+            
+            % plot for all filters
+            if ~exist('filterName', 'var')
+                plotFilterAll();
+
+                return;
+            end
+            
+            % Parameters
+            lineWidth = 2;
+            filterExpectedColor = [0.4660, 0.6740, 0.1880];
+            filterInitialColor = [0.8500, 0.3250, 0.0980];
+            filterMinErrorColor = [0.9290, 0.6940, 0.1250];
+            limits = obj.getFilterLimits(filterName);
+            
+            Viz.figure(sprintf('Filter: %s', filterName));
+            
+            plotFilterExpected();
+            hold('on');
+            plotFilterInitial();
+            plotFilterMinError();
+            setAxes()
+            setTitle();
+            
+            % Local Functions
+            function plotFilterAll()
+                for i = 1:length(obj.paramNames)
+                    paramName = obj.paramNames{i};
+                    
+                    % filter names start with `w`
+                    if paramName(1) == 'w'
+                        obj.plotFilter(paramName);
+                    end
+                end
+            end
+            function plotFilterExpected()
+                plot(obj.params.(filterName).expected, ...
+                    'DisplayName', 'Ground truth', ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterExpectedColor ...
+                );
+            end
+            function plotFilterInitial()
+                plot(obj.params.(filterName).initial, ...
+                    'DisplayName', 'Initial value', ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterInitialColor ...
+                );
+            end
+            function plotFilterMinError()
+                [~, index] = min(obj.costs.val);
+                plot(obj.params.(filterName).history{index}, ...
+                    'DisplayName', sprintf('Min Val Error (#%d)', index - 1), ...
+                    'LineStyle', '--', ...
+                    'LineWidth', lineWidth - 0.5, ...
+                    'Color', filterMinErrorColor ...
+                );
+            end
+            function setAxes()
+                setTicks();
+                % setAxesLocations();
+                % setLabels();
+                setLegend();
+                grid('on');
+                box('off');
+                
+                % Local Functions
+                function setTicks()
+                    axis(limits);
+                    set(gca, 'XTick', limits(1:2));
+                    set(gca, 'YTick', unique(sort([limits(3), 0, limits(4)])));
+                end
+                function setAxesLocations()
+                    set(gca, 'XAxisLocation', 'origin');
+                    set(gca, 'YAxisLocation', 'origin');
+                end
+                function setLabels()
+                    xlabel('#');
+                    ylabel('Intensity');
+                end
+                function setLegend()
+                    % legend
+                    lgd = legend('show');
+                    lgd.Location = 'southwest';
+                    lgd.Box = 'off';
+                end
+            end
+            function setTitle()
+                title(sprintf(...
+                    'Filter %s - Minimum Validation Error is %g in Epoch #%d', ...
+                    filterName, ...
+                    obj.params.(filterName).minValCost.value, ...
+                    obj.params.(filterName).minValCost.index - 1 ...
+                ));
+            end
+        end
         function saveFilterVideo(obj, filterName, filterVideoFilename)
             
             % Parameters
@@ -1122,14 +1222,7 @@ classdef Viz < handle
             
             % plot for all filters
             if ~exist('filterName', 'var')
-                for i = 1:length(obj.paramNames)
-                    paramName = obj.paramNames{i};
-                    
-                    % filter names start with `w`
-                    if paramName(1) == 'w'
-                        obj.plotFilterHistory(paramName);
-                    end
-                end
+                plotFilterHistoryForAllFilters();
                 
                 return;
             end
@@ -1138,20 +1231,7 @@ classdef Viz < handle
             
             % plot each `n` epochs in a new figure
             if ~exist('epochs', 'var')
-                n = 100; % number of epochs in each figure
-                s = 1; % stard epoch
-                f = n; % finish epoch
-                
-                while s < numberOfEpochs
-                    if f > numberOfEpochs
-                        f = numberOfEpochs;
-                    end
-                    
-                    obj.plotFilterHistory(filterName, s:f);
-                    
-                    s = s + n;
-                    f = f + n;
-                end
+                plotFilterHistoryForAllEpochs();
                 
                 return;
             end
@@ -1224,6 +1304,32 @@ classdef Viz < handle
             );
             
             % Local Functions
+            function plotFilterHistoryForAllFilters()
+                for i = 1:length(obj.paramNames)
+                    paramName = obj.paramNames{i};
+                    
+                    % filter names start with `w`
+                    if paramName(1) == 'w'
+                        obj.plotFilterHistory(paramName);
+                    end
+                end
+            end
+            function plotFilterHistoryForAllEpochs()
+                n = 100; % number of epochs in each figure
+                s = 1; % stard epoch
+                f = n; % finish epoch
+                
+                while s < numberOfEpochs
+                    if f > numberOfEpochs
+                        f = numberOfEpochs;
+                    end
+                    
+                    obj.plotFilterHistory(filterName, s:f);
+                    
+                    s = s + n;
+                    f = f + n;
+                end
+            end
             function [cols, rows] = getColsRows(n)
                 % cols > rows
                 % - cols
