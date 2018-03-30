@@ -46,7 +46,7 @@ The paths for the parameters and data are specified as variables atop `DagNNNois
 
 Alternatively, one can create a Center For High Performance Computing (CHPC) account to run the program on Utah CHPC servers. To do so, please [click here](https://www.chpc.utah.edu/userservices/accounts.php) for instructions.
 
-Once logged into a CHPC server, perform steps in [Installation section](#Installation) to install. Then execute.
+Once logged into a CHPC server, perform steps in [Installation section](#installation) to install. Then execute.
 
 ## Contributors
 
