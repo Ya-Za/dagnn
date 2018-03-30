@@ -1,40 +1,7 @@
 classdef Viz < handle
     %Visualize a 'DagNN'
     
-    % Files & Folders
-    properties (Constant)
-        % Properties
-        % ----------
-        % - EPOCHS_DIR: char vector
-        %   Epochs directory
-        % - VIDEOS_DIR: char vector
-        %   Videos directory
-        % - CONFIG_FILENAME: char vector
-        %   Config filename
-        % - COSTS_FILENAME: char vector
-        %   Costs filename
-        % - DATA_FILENAME: char vector
-        %   Data filename
-        % - DATA_INDEXES_FILENAME: char vector
-        %   Data indexes filename
-        % - PARAMS_EXPECTED_FILENAME: char vector
-        %   Expected parameters filename
-        % - PARAMS_INITIAL_FILENAME: char vector
-        %   Initial parameters filename
-        
-        EPOCHS_DIR = 'epochs';
-        VIDEOS_DIR = 'vidoes';
-        
-        CONFIG_FILENAME = 'config.json';
-        
-        COSTS_FILENAME = 'costs.mat';
-        DATA_FILENAME = 'data.mat';
-        DATA_INDEXES_FILENAME = 'data-indexes.mat';
-        PARAMS_EXPECTED_FILENAME = 'params-expected';
-        PARAMS_INITIAL_FILENAME = 'params-initial';
-    end
-    
-    % Plot
+    % Plot Constants
     properties (Constant)
         % Properties
         % ----------
@@ -155,10 +122,10 @@ classdef Viz < handle
             obj.path = path;
             
             % load config file
-            obj.config = jsondecode(fileread(fullfile(obj.path, Viz.CONFIG_FILENAME)));
+            obj.config = jsondecode(fileread(fullfile(obj.path, Path.CONFIG_FILENAME)));
             
             % data
-            data = load(fullfile(path, Viz.DATA_FILENAME));
+            data = load(fullfile(path, Path.DATA_FILENAME));
             obj.X = data.x;
             obj.Y = data.y;
             
@@ -170,7 +137,7 @@ classdef Viz < handle
             obj.initLearningParams();
             obj.initDataIndexes();
             
-            obj.costs = load(fullfile(path, Viz.COSTS_FILENAME));
+            obj.costs = load(fullfile(path, Path.COSTS_FILENAME));
             
             obj.initParamNames();
             obj.initParams();
@@ -201,7 +168,7 @@ classdef Viz < handle
             
             % load shuffled data indexes
             obj.dataIndexes = load(...
-                fullfile(obj.path, Viz.DATA_INDEXES_FILENAME) ...
+                fullfile(obj.path, Path.DATA_INDEXES_FILENAME) ...
             );
         end
         function initParamNames(obj)
@@ -216,7 +183,7 @@ classdef Viz < handle
             
             % Local Functions
             function initParmsExpected()
-                paramsExpected = load(fullfile(obj.path, Viz.PARAMS_EXPECTED_FILENAME));
+                paramsExpected = load(fullfile(obj.path, Path.PARAMS_EXPECTED_FILENAME));
                 
                 for i = 1:length(obj.paramNames)
                     paramName = obj.paramNames{i};
@@ -224,7 +191,7 @@ classdef Viz < handle
                 end
             end
             function initParamsInitial()
-                paramsInitial = load(fullfile(obj.path, Viz.PARAMS_INITIAL_FILENAME));
+                paramsInitial = load(fullfile(obj.path, Path.PARAMS_INITIAL_FILENAME));
                 
                 for i = 1:length(obj.paramNames)
                     paramName = obj.paramNames{i};
@@ -233,7 +200,7 @@ classdef Viz < handle
             end
             function initParamsHistory()
                 % filenames of saved 'epoch' files
-                epochsDir = fullfile(obj.path, Viz.EPOCHS_DIR);
+                epochsDir = fullfile(obj.path, Path.EPOCHS_DIR);
                 filenames = dir(fullfile(epochsDir, '*.mat'));
                 filenames = {filenames.name};
                 
@@ -966,7 +933,7 @@ classdef Viz < handle
         function filterVideoFilename = getFilterVideoFilename(obj, filterName)
             filterVideoFilename = fullfile(...
                 obj.path, ...
-                Viz.VIDEOS_DIR, ...
+                Path.VIDEOS_DIR, ...
                 [filterName, '.mp4'] ...
             );
         end
