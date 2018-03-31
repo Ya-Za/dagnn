@@ -1,6 +1,9 @@
 classdef DagNNTrainer < handle
     %Trainer for DagNN
+    
+    % Properties
     properties
+        % todo: change props to `config`
         % - props: struct base on `dagnntrainer_schema.json`
         %   Properties of cnn contains configuration of 'data', 'net'
         %   and 'learning' parameters
@@ -31,6 +34,7 @@ classdef DagNNTrainer < handle
         %   data-sets
         % - elapsed_times: double array
         %   Array of elased times
+
         props
         db
         current_epoch
@@ -41,6 +45,7 @@ classdef DagNNTrainer < handle
         elapsed_times
     end
     
+    % Constant Properties
     properties (Constant)
         % - props_dir: char vector
         %   Path of properties json files
@@ -70,6 +75,7 @@ classdef DagNNTrainer < handle
         );
     end
     
+    % Constructor
     methods
         function obj = DagNNTrainer(props_filename)
             %Constructor
@@ -87,7 +93,138 @@ classdef DagNNTrainer < handle
             
             obj.init_props(props_filename);
         end
-        
+    end
+    
+    % Run
+    methods
+        function run(obj)
+            % Run the learing process contains `forward`, `backward`
+            % and `update` steps
+            
+            % init net
+            obj.init();
+            
+            % print epoch progress (last saved epoch)
+            obj.print_epoch_progress()
+            
+            obj.current_epoch = obj.current_epoch + 1;
+            
+            % epoch number that network has minimum cost on validation data
+            [~, index_min_val_cost] = min(obj.costs.val);
+            
+            n = length(obj.data.train.x);
+            batch_size = obj.props.learning.batch_size;
+            
+            % epoch loop
+            while obj.current_epoch <= obj.props.learning.number_of_epochs + 1
+                begin_time = cputime();
+                % shuffle train data
+                permuted_indexes = randperm(n);
+                
+                % batch loop
+                for start_index = 1:batch_size:n
+                    end_index = start_index + batch_size - 1;
+                    if end_index > n
+                        end_index = n;
+                    end
+                    
+                    indexes = permuted_indexes(start_index:end_index);
+                    % make batch data
+                    % - x
+                    input = ...
+                        DagNNTrainer.cell_array_to_tensor(...
+                        obj.data.train.x(indexes) ...
+                    );
+                    % - y
+                    expected_output = ...
+                        DagNNTrainer.cell_array_to_tensor(...
+                        obj.data.train.y(indexes) ...
+                    );
+                    
+                    % forward, backward step
+                    obj.net.eval(...
+                        {...
+                            obj.props.net.vars.input.name, input, ...
+                            obj.props.net.vars.expected_output.name, expected_output
+                        }, ...
+                        {...
+                            obj.props.net.vars.cost.name, 1 ...
+                        } ...
+                    );
+                    
+                    % update step
+                    for param_index = 1:length(obj.net.params)
+                        obj.net.params(param_index).value = ...
+                            obj.net.params(param_index).value - ...
+                            obj.props.learning.learning_rate * obj.net.params(param_index).der;
+                    end
+                    
+                    % print samples progress
+                    fprintf('Samples:\t%d-%d/%d\n', start_index, end_index, n);
+                end
+                
+                % elapsed times
+                obj.elapsed_times(end + 1) = cputime() - begin_time;
+                % costs
+                % - train
+                obj.costs.train(end + 1) = obj.get_train_cost();
+                % - val
+                obj.costs.val(end + 1) = obj.get_val_cost();
+                % - test
+                obj.costs.test(end + 1) = obj.get_test_cost();
+                
+                % no imporovement in number_of_val_fails steps
+                if obj.costs.val(end) < obj.costs.val(index_min_val_cost)
+                    index_min_val_cost = length(obj.costs.val);
+                end
+                
+                if (length(obj.costs.val) - index_min_val_cost) >= ...
+                        obj.props.learning.number_of_val_fails
+                    break;
+                end
+                
+                % print epoch progress
+                obj.print_epoch_progress()
+                
+                % save
+                % - costs
+                obj.save_costs();
+                % - elapsed times
+                obj.save_elapsed_times();
+                % - net
+                obj.save_current_epoch();
+                
+                % increament current epoch
+                obj.current_epoch = obj.current_epoch + 1;
+            end 
+        end
+        function y = out(obj, x)
+            % Compute `estimated-outputs` of network based on given
+            % `inputs`
+            %
+            % Parameters
+            % ----------
+            % - x: cell array
+            %   Input
+            % - y: cell array
+            %   Actual output
+            
+            n = numel(x);
+            y = cell(n, 1);
+            for i = 1:n
+                obj.net.eval({...
+                    obj.props.net.vars.input.name, x{i} ...
+                });
+                
+                y{i} = obj.net.vars(...
+                    obj.net.getVarIndex(obj.props.net.vars.output.name) ...
+                ).value;
+            end
+        end
+    end
+    
+    % Init
+    methods
         % todo: handle this in `init_net` method
         function init_props(obj, filename)
             % Read `props` from the configuration json file and
@@ -136,6 +273,39 @@ classdef DagNNTrainer < handle
                 else
                     obj.props.net.layers(i).params = obj.props.net.layers(i).params';
                 end
+            end
+        end
+        
+        function init(obj)
+            % Initialize properties
+            
+            % db
+            obj.init_db();
+            
+            % backup directory
+            obj.init_bak_dir()
+            
+            % current epoch
+            obj.init_current_epoch()
+            
+            % net
+            obj.init_net();
+            
+            % - meta
+            obj.init_meta();
+            
+            % data
+            obj.init_data();
+            
+            % costs
+            obj.init_costs();
+            
+            % elapsed times
+            obj.init_elapsed_times();
+            
+            % bak_dir == 'must_be_removed'
+            if strcmp(obj.props.data.bak_dir, 'must_be_removed')
+                rmdir(obj.props.data.bak_dir, 's');
             end
         end
         
@@ -210,15 +380,27 @@ classdef DagNNTrainer < handle
             if ~exist(obj.props.data.bak_dir, 'dir')
                 mkdir(obj.props.data.bak_dir);
             end
+            
+            % `epochs` dir
+            epochs_dir = fullfile(obj.props.data.bak_dir, Path.EPOCHS_DIR);
+            if ~exist(epochs_dir, 'dir')
+                mkdir(epochs_dir);
+            end
         end
         
         function init_current_epoch(obj)
             % Initialize `current_epoch` based on last
             % saved epoch in the `bak` directory
             
-            list = dir(fullfile(obj.props.data.bak_dir, 'epoch_*.mat'));
+            % todo: remove `epoch_` prefix
+            list = dir(fullfile(...
+                obj.props.data.bak_dir, ...
+                Path.EPOCHS_DIR, ...
+                '*.mat' ...
+            ));
+            % list = dir(fullfile(obj.props.data.bak_dir, 'epoch_*.mat'));
             % todo: [\d] -> \d
-            tokens = regexp({list.name}, 'epoch_([\d]+).mat', 'tokens');
+            tokens = regexp({list.name}, '(\d+).mat', 'tokens');
             epoch = cellfun(@(x) sscanf(x{1}{1}, '%d'), tokens);
             obj.current_epoch = max(epoch);
         end
@@ -387,8 +569,6 @@ classdef DagNNTrainer < handle
             
             params = obj.props.net.params;
             weights = load(obj.props.data.params_filename);
-%             disp('Must be changed');
-%             weights.w_G = randn(10, 1);
             for i = 1:length(params)
                 name = params(i).name;
                 size = params(i).size;
@@ -519,75 +699,10 @@ classdef DagNNTrainer < handle
                 obj.save_elapsed_times();
             end
         end
-        
-        function init(obj)
-            % Initialize properties
-            
-            % db
-            obj.init_db();
-            
-            % backup directory
-            obj.init_bak_dir()
-            
-            % current epoch
-            obj.init_current_epoch()
-            
-            % net
-            obj.init_net();
-            
-            % - meta
-            obj.init_meta();
-            
-            % data
-            obj.init_data();
-            
-            % costs
-            obj.init_costs();
-            
-            % elapsed times
-            obj.init_elapsed_times();
-            
-            % bak_dir == 'must_be_removed'
-            if strcmp(obj.props.data.bak_dir, 'must_be_removed')
-                rmdir(obj.props.data.bak_dir, 's');
-            end
-        end
-        
-        function y = out(obj, x)
-            % Compute `estimated-outputs` of network based on given
-            % `inputs`
-            %
-            % Parameters
-            % ----------
-            % - x: cell array
-            %   Input
-            % - y: cell array
-            %   Actual output
-            
-            n = numel(x);
-            y = cell(n, 1);
-            for i = 1:n
-                obj.net.eval({...
-                    obj.props.net.vars.input.name, x{i} ...
-                });
-                
-                y{i} = obj.net.vars(...
-                    obj.net.getVarIndex(obj.props.net.vars.output.name) ...
-                ).value;
-            end
-        end
-        
-        function load_best_val_epoch(obj)
-            % Load best validation performance among saved epochs
-            
-            % update current-epoch
-            [~, obj.current_epoch] = min(obj.costs.val);
-            % init-net
-            % todo: efficient way to change the net based on just `currnt
-            % epoch`
-            obj.init_net();
-        end
-        
+    end
+    
+    % Print, Plot
+    methods
         function print_epoch_progress(obj)
             % Print progress, after each batch
             %
@@ -612,226 +727,10 @@ classdef DagNNTrainer < handle
                 obj.elapsed_times(obj.current_epoch));
             DagNNViz.print_dashline();
         end
-        
-        % todo: Must be removed or change to `real time` plot
-        function plot_costs(obj)
-            % Plot `costs` over time
-            
-            epochs = 1:length(obj.costs.train);
-            epochs = epochs - 1; % start from zero (0, 1, 2, ...)
-            
-            figure(...
-                'Name', 'CNN - Costs [Training, Validation, Test]', ...
-                'NumberTitle', 'off', ...
-                'Units', 'normalized', ...
-                'OuterPosition', [0.25, 0.25, 0.5, 0.5] ...
-                );
-            
-            % costs
-            % - train
-            plot(epochs, obj.costs.train, 'LineWidth', 2, 'Color', 'blue');
-            set(gca, 'YScale', 'log');
-            hold('on');
-            % - validation
-            plot(epochs, obj.costs.val, 'LineWidth', 2, 'Color', 'green');
-            % - test
-            plot(epochs, obj.costs.test, 'LineWidth', 2, 'Color', 'red');
-            
-            % minimum validation error
-            % - circle
-            [~, index_min_val_cost] = min(obj.costs.val);
-            circle_x = index_min_val_cost - 1;
-            circle_y = obj.costs.val(index_min_val_cost);
-            dark_green = [0.1, 0.8, 0.1];
-            scatter(circle_x, circle_y, ...
-                'MarkerEdgeColor', dark_green, ...
-                'SizeData', 300, ...
-                'LineWidth', 2 ...
-                );
-            
-            % - cross lines
-            h_ax = gca;
-            %   - horizontal line
-            line(...
-                h_ax.XLim, ...
-                [circle_y, circle_y], ...
-                'Color', dark_green, ...
-                'LineStyle', ':', ...
-                'LineWidth', 1.5 ...
-                );
-            %   - vertical line
-            line(...
-                [circle_x, circle_x], ...
-                h_ax.YLim, ...
-                'Color', dark_green, ...
-                'LineStyle', ':', ...
-                'LineWidth', 1.5 ...
-                );
-            
-            hold('off');
-            
-            % labels
-            xlabel('Epoch');
-            ylabel('Mean Squared Error (mse)');
-            
-            % title
-            title(...
-                sprintf('Minimum Validation Error is %.3f at Epoch: %d', ...
-                obj.costs.val(index_min_val_cost), ...
-                index_min_val_cost - 1 ...
-                ) ...
-                );
-            
-            % legend
-            legend(...
-                sprintf('Training (%.3f)', obj.costs.train(index_min_val_cost)), ...
-                sprintf('Validation (%.3f)', obj.costs.val(index_min_val_cost)), ...
-                sprintf('Test (%.3f)', obj.costs.test(index_min_val_cost)), ...
-                'Best' ...
-                );
-            
-            % grid
-            grid('on');
-            grid('minor');
-        end
-        
-        function filename = get_current_epoch_filename(obj)
-            % Get path of `current epoch`
-            % saved file in `bak` directory
-            %
-            % Returns
-            % -------
-            % - filename: char vector
-            
-            filename = fullfile(...
-                obj.props.data.bak_dir, ...
-                sprintf('epoch_%d', obj.current_epoch) ...
-            );
-        end
-        
-        function save_current_epoch(obj)
-            % Save `net` of current-epoch in `bak`
-            % directory
-            
-            net_struct = obj.net.saveobj();
-            save(...
-                obj.get_current_epoch_filename(), ...
-                '-struct', 'net_struct' ...
-            ) ;
-            
-            clear('net_struct');
-        end
-        
-        function load_current_epoch(obj)
-            % Load `net` of current-epoch from `bak`
-            % directory
-            
-            net_struct = load(...
-                obj.get_current_epoch_filename() ...
-            );
-            
-            obj.net = dagnn.DagNN.loadobj(net_struct) ;
-            clear('net_struct');
-        end
-        
-        function filename = get_costs_filename(obj)
-            % Return path of `costs.mat` saved file in
-            % `bak` directory
-            
-            filename = fullfile(...
-                obj.props.data.bak_dir, ...
-                'costs.mat' ...
-            );
-        end
-        
-        % todo: save `costs` in `meta` data of each epoch
-        function save_costs(obj)
-            % Save `costs.mat` in `bak` directory
-            
-            costs = obj.costs;
-            
-            save(...
-                obj.get_costs_filename(), ...
-                '-struct', ...
-                'costs' ...
-            );
-            
-            clear('costs');
-        end
-        
-        function load_costs(obj)
-            % Load `costs.mat` from `bak` directory
-            
-            obj.costs = load(obj.get_costs_filename());
-        end
-        
-        function filename = get_db_indexes_filename(obj)
-            % Return path of `db_indexes.mat`
-            % saved file in `bak` directory
-            
-            filename = fullfile(...
-                obj.props.data.bak_dir, ...
-                'db_indexes.mat' ...
-            );
-        end
-        
-        function save_db_indexes(obj, indexes)
-            % Save `db_indexes.mat` in `bak` directory
-            
-            db_indexes = indexes;
-            save(...
-                obj.get_db_indexes_filename(), ...
-                'db_indexes' ...
-            );
-        end
-        
-        function db_indexes = load_db_indexes(obj)
-            % Loads `db_indexes.mat` from `bak` directory
-            
-            db_indexes = getfield(...
-                load(obj.get_db_indexes_filename()), ...
-                'db_indexes' ...
-            );
-        end
-        
-        function filename = get_elapsed_times_filename(obj)
-            % Return path of `elapsed_times.mat`
-            % saved file in `bak` directory
-            
-            filename = fullfile(...
-                obj.props.data.bak_dir, ...
-                'elapsed_times.mat' ...
-            );
-        end
-        
-        % todo: save `elapsed times` in `meta` data of each epoch
-        function save_elapsed_times(obj)
-            % Save `elapsed_times` in `bak` directory
-            
-            elapsed_times = obj.elapsed_times;
-            save(...
-                obj.get_elapsed_times_filename(), ...
-                'elapsed_times' ...
-            );
-            
-            clear('elapsed_times');
-        end
-        
-        function load_elapsed_times(obj)
-            % Load `elapsed_times.mat` from `bak` directory
-            
-            obj.elapsed_times = getfield(...
-                load(obj.get_elapsed_times_filename()), ...
-                'elapsed_times' ...
-            );
-        end
-        
-        function save(obj, filename)
-            % Save the `DagNNTrainer` object
-            
-            save(filename, 'obj');
-        end
-        
+    end
+    
+    % Make
+    methods
         %todo: split to `db`, `params`
         function make_random_data_old(obj, number_of_samples, generator)
             % Make random `db` and `params` files
@@ -938,110 +837,159 @@ classdef DagNNTrainer < handle
             );
             clear('params');
         end
+    end
+    
+    % Filenames
+    methods
+        function filename = get_current_epoch_filename(obj)
+            % Get path of `current epoch`
+            % saved file in `bak` directory
+            %
+            % Returns
+            % -------
+            % - filename: char vector
+            
+            filename = fullfile(...
+                obj.props.data.bak_dir, ...
+                Path.EPOCHS_DIR, ...
+                sprintf('%d', obj.current_epoch) ...
+            );
+        end
         
-        function run(obj)
-            % Run the learing process contains `forward`, `backward`
-            % and `update` steps
+        function filename = get_costs_filename(obj)
+            % Return path of `costs.mat` saved file in
+            % `bak` directory
             
-            % init net
-            obj.init();
+            filename = fullfile(...
+                obj.props.data.bak_dir, ...
+                Path.COSTS_FILENAME ...
+            );
+        end
+        
+        function filename = get_db_indexes_filename(obj)
+            % Return path of `db_indexes.mat`
+            % saved file in `bak` directory
             
-            % print epoch progress (last saved epoch)
-            obj.print_epoch_progress()
+            filename = fullfile(...
+                obj.props.data.bak_dir, ...
+                Path.DATA_INDEXES_FILENAME ...
+            );
+        end
+        
+        function filename = get_elapsed_times_filename(obj)
+            % Return path of `elapsed_times.mat`
+            % saved file in `bak` directory
             
-            obj.current_epoch = obj.current_epoch + 1;
-            
-            % epoch number that network has minimum cost on validation data
-            [~, index_min_val_cost] = min(obj.costs.val);
-            
-            n = length(obj.data.train.x);
-            batch_size = obj.props.learning.batch_size;
-            
-            % epoch loop
-            while obj.current_epoch <= obj.props.learning.number_of_epochs + 1
-                begin_time = cputime();
-                % shuffle train data
-                permuted_indexes = randperm(n);
-                
-                % batch loop
-                for start_index = 1:batch_size:n
-                    end_index = start_index + batch_size - 1;
-                    if end_index > n
-                        end_index = n;
-                    end
-                    
-                    indexes = permuted_indexes(start_index:end_index);
-                    % make batch data
-                    % - x
-                    input = ...
-                        DagNNTrainer.cell_array_to_tensor(...
-                        obj.data.train.x(indexes) ...
-                    );
-                    % - y
-                    expected_output = ...
-                        DagNNTrainer.cell_array_to_tensor(...
-                        obj.data.train.y(indexes) ...
-                    );
-                    
-                    % forward, backward step
-                    obj.net.eval(...
-                        {...
-                            obj.props.net.vars.input.name, input, ...
-                            obj.props.net.vars.expected_output.name, expected_output
-                        }, ...
-                        {...
-                            obj.props.net.vars.cost.name, 1 ...
-                        } ...
-                    );
-                    
-                    % update step
-                    for param_index = 1:length(obj.net.params)
-                        obj.net.params(param_index).value = ...
-                            obj.net.params(param_index).value - ...
-                            obj.props.learning.learning_rate * obj.net.params(param_index).der;
-                    end
-                    
-                    % print samples progress
-                    fprintf('Samples:\t%d-%d/%d\n', start_index, end_index, n);
-                end
-                
-                % elapsed times
-                obj.elapsed_times(end + 1) = cputime() - begin_time;
-                % costs
-                % - train
-                obj.costs.train(end + 1) = obj.get_train_cost();
-                % - val
-                obj.costs.val(end + 1) = obj.get_val_cost();
-                % - test
-                obj.costs.test(end + 1) = obj.get_test_cost();
-                
-                % no imporovement in number_of_val_fails steps
-                if obj.costs.val(end) < obj.costs.val(index_min_val_cost)
-                    index_min_val_cost = length(obj.costs.val);
-                end
-                
-                if (length(obj.costs.val) - index_min_val_cost) >= ...
-                        obj.props.learning.number_of_val_fails
-                    break;
-                end
-                
-                % print epoch progress
-                obj.print_epoch_progress()
-                
-                % save
-                % - costs
-                obj.save_costs();
-                % - elapsed times
-                obj.save_elapsed_times();
-                % - net
-                obj.save_current_epoch();
-                
-                % increament current epoch
-                obj.current_epoch = obj.current_epoch + 1;
-            end 
+            filename = fullfile(...
+                obj.props.data.bak_dir, ...
+                Path.ELAPSED_TIMES_FILENAME ...
+            );
         end
     end
     
+    % Save
+    methods
+        function save_current_epoch(obj)
+            % Save `net` of current-epoch in `bak`
+            % directory
+            
+            net_struct = obj.net.saveobj();
+            save(...
+                obj.get_current_epoch_filename(), ...
+                '-struct', 'net_struct' ...
+            ) ;
+            
+            clear('net_struct');
+        end
+        function save_costs(obj)
+            % Save `costs.mat` in `bak` directory
+            
+            costs = obj.costs;
+            
+            save(...
+                obj.get_costs_filename(), ...
+                '-struct', ...
+                'costs' ...
+            );
+            
+            clear('costs');
+        end
+        function save(obj, filename)
+            % Save the `DagNNTrainer` object
+            
+            save(filename, 'obj');
+        end
+        % todo: save `elapsed times` in `meta` data of each epoch
+        function save_elapsed_times(obj)
+            % Save `elapsed_times` in `bak` directory
+            
+            elapsed_times = obj.elapsed_times;
+            save(...
+                obj.get_elapsed_times_filename(), ...
+                'elapsed_times' ...
+            );
+            
+            clear('elapsed_times');
+        end
+        function save_db_indexes(obj, indexes)
+            % Save `db_indexes.mat` in `bak` directory
+            
+            db_indexes = indexes;
+            save(...
+                obj.get_db_indexes_filename(), ...
+                'db_indexes' ...
+            );
+        end
+    end
+    
+    % Load
+    methods
+        function load_elapsed_times(obj)
+            % Load `elapsed_times.mat` from `bak` directory
+            
+            obj.elapsed_times = getfield(...
+                load(obj.get_elapsed_times_filename()), ...
+                'elapsed_times' ...
+            );
+        end
+        function load_best_val_epoch(obj)
+            % Load best validation performance among saved epochs
+            
+            % update current-epoch
+            [~, obj.current_epoch] = min(obj.costs.val);
+            % init-net
+            % todo: efficient way to change the net based on just `currnt
+            % epoch`
+            obj.init_net();
+        end
+        function load_current_epoch(obj)
+            % Load `net` of current-epoch from `bak`
+            % directory
+            
+            net_struct = load(...
+                obj.get_current_epoch_filename() ...
+            );
+            
+            obj.net = dagnn.DagNN.loadobj(net_struct) ;
+            clear('net_struct');
+        end
+        function db_indexes = load_db_indexes(obj)
+            % Loads `db_indexes.mat` from `bak` directory
+            
+            db_indexes = getfield(...
+                load(obj.get_db_indexes_filename()), ...
+                'db_indexes' ...
+            );
+        end
+        % todo: save `costs` in `meta` data of each epoch
+        function load_costs(obj)
+            % Load `costs.mat` from `bak` directory
+            
+            obj.costs = load(obj.get_costs_filename());
+        end
+    end
+    
+    % Utils
     methods (Static)
         function tensor = cell_array_to_tensor(cell_array)
             % Convert cell array to multi-dimensional array
@@ -1074,7 +1022,10 @@ classdef DagNNTrainer < handle
             obj = load(filename);
             obj = obj.(char(fieldnames(obj)));
         end
-        
+    end
+    
+    % Test
+    methods
         function test1()
             % setup `matconvnet`
             run('vl_setupnn.m');
@@ -1102,10 +1053,95 @@ classdef DagNNTrainer < handle
             end
         end
         
-        function test
+        function test2()
             % Test `DagNNTrainer` class
             suite = testsuite('./tests/TestDagNNTrainer.m');
             suite.run();
         end
-    end 
+    end
+    
+    % Obsolete
+    methods
+        % todo: Must be removed or change to `real time` plot
+        function plot_costs(obj)
+            % Plot `costs` over time
+            
+            epochs = 1:length(obj.costs.train);
+            epochs = epochs - 1; % start from zero (0, 1, 2, ...)
+            
+            figure(...
+                'Name', 'CNN - Costs [Training, Validation, Test]', ...
+                'NumberTitle', 'off', ...
+                'Units', 'normalized', ...
+                'OuterPosition', [0.25, 0.25, 0.5, 0.5] ...
+                );
+            
+            % costs
+            % - train
+            plot(epochs, obj.costs.train, 'LineWidth', 2, 'Color', 'blue');
+            set(gca, 'YScale', 'log');
+            hold('on');
+            % - validation
+            plot(epochs, obj.costs.val, 'LineWidth', 2, 'Color', 'green');
+            % - test
+            plot(epochs, obj.costs.test, 'LineWidth', 2, 'Color', 'red');
+            
+            % minimum validation error
+            % - circle
+            [~, index_min_val_cost] = min(obj.costs.val);
+            circle_x = index_min_val_cost - 1;
+            circle_y = obj.costs.val(index_min_val_cost);
+            dark_green = [0.1, 0.8, 0.1];
+            scatter(circle_x, circle_y, ...
+                'MarkerEdgeColor', dark_green, ...
+                'SizeData', 300, ...
+                'LineWidth', 2 ...
+                );
+            
+            % - cross lines
+            h_ax = gca;
+            %   - horizontal line
+            line(...
+                h_ax.XLim, ...
+                [circle_y, circle_y], ...
+                'Color', dark_green, ...
+                'LineStyle', ':', ...
+                'LineWidth', 1.5 ...
+                );
+            %   - vertical line
+            line(...
+                [circle_x, circle_x], ...
+                h_ax.YLim, ...
+                'Color', dark_green, ...
+                'LineStyle', ':', ...
+                'LineWidth', 1.5 ...
+                );
+            
+            hold('off');
+            
+            % labels
+            xlabel('Epoch');
+            ylabel('Mean Squared Error (mse)');
+            
+            % title
+            title(...
+                sprintf('Minimum Validation Error is %.3f at Epoch: %d', ...
+                obj.costs.val(index_min_val_cost), ...
+                index_min_val_cost - 1 ...
+                ) ...
+                );
+            
+            % legend
+            legend(...
+                sprintf('Training (%.3f)', obj.costs.train(index_min_val_cost)), ...
+                sprintf('Validation (%.3f)', obj.costs.val(index_min_val_cost)), ...
+                sprintf('Test (%.3f)', obj.costs.test(index_min_val_cost)), ...
+                'Best' ...
+                );
+            
+            % grid
+            grid('on');
+            grid('minor');
+        end
+    end
 end

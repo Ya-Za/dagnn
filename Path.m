@@ -29,7 +29,8 @@ classdef Path < handle
         COSTS_FILENAME = 'costs.mat';
         DATA_FILENAME = 'data.mat';
         DATA_INDEXES_FILENAME = 'data-indexes.mat';
-        PARAMS_EXPECTED_FILENAME = 'params-expected';
-        PARAMS_INITIAL_FILENAME = 'params-initial';
+        PARAMS_EXPECTED_FILENAME = 'params-expected.mat';
+        PARAMS_INITIAL_FILENAME = 'params-initial.mat';
+        ELAPSED_TIMES_FILENAME = 'elapsed-times.mat';
     end
 end
