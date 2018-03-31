@@ -72,9 +72,7 @@ delete('matconvnet.zip');
 %--------------------
 %File Copying
 %--------------------
-copyfile('+dagnn/BatchNorm2.m', 'matconvnet/matlab/+dagnn');
-copyfile('+dagnn/Neg.m', 'matconvnet/matlab/+dagnn');
-copyfile('+dagnn/Times.m', 'matconvnet/matlab/+dagnn');
+copyfile('+dagnn/*.m', 'matconvnet/matlab/+dagnn');
 
 %--------------------
 %Installs matconvnet
