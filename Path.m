@@ -28,6 +28,10 @@ classdef Path < handle
         %   Base Configs directory
         % - INDEX_HTML_FILENAME: char vector
         %   Path of `index.html` file
+        % - DATA_DIR: char vector
+        %   Data directory
+        % - GROUND_TRUTH_DIR: char vector
+        %   Ground truth directory
         
         EPOCHS_DIR = 'epochs';
         VIDEOS_DIR = 'vidoes';
@@ -45,5 +49,8 @@ classdef Path < handle
         RESULTS_DIR = './assets/results/';
         NOISY_CONFIGS_DIR = './assets/noisy-configs';
         INDEX_HTML_FILENAME = './assets/index.html';
+        
+        DATA_DIR = './assets/data';
+        GROUND_TRUTH_DIR = './assets/ground-truth';
     end
 end

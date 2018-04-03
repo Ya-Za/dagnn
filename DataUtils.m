@@ -393,4 +393,72 @@ classdef DataUtils < handle
             DataUtils.mkdata(jsondecode(fileread(opts_path)));
         end
     end
+    
+    % Make Data, Params
+    methods (Static)
+        function make_data(n, l, filename, generator)
+            % Make random `data` file
+            %
+            % Parameters
+            % ----------
+            % - n : int
+            %   number of samples
+            % - l : int vector
+            %   length of each sample
+            % - filename: char vector
+            %   filename of saved file
+            % - generator : handle function (default is @randn)
+            %   generator function such as `randn`, `rand`, ...
+            
+            % default generator
+            if ~exist('generator', 'var')
+                generator = @randn;
+            end
+            
+            % db
+            data = struct();
+            data.x = cell(n, 1);
+            data.y = cell(n, 1);
+            
+            % - x, y
+            for i = 1:n
+                data.x{i} = generator([l, 1]);
+                data.y{i} = generator([l, 1]);
+            end
+            
+            % - save
+            save(fullfile(Path.DATA_DIR, filename), '-struct', 'data');
+            clear('data');
+        end
+        function make_params(l, filename)
+            % Make random `data` file
+            %
+            % Parameters
+            % ----------
+            % - l : int vector
+            %   length of each sample
+            % - filename: char vector
+            %   filename of saved file
+            
+            params = struct();
+            % b_A
+            params.b_A = 0;
+            % b_B
+            params.b_B = 0;
+            % b_G
+            params.b_G = 0;
+            
+            x = linspace(0, 2 * pi, l)';
+            % w_A
+            params.w_A = -sin(x);
+            % w_B
+            params.w_B = sin(x);
+            % w_G
+            params.w_G = cos(x);
+            
+            % - save
+            save(fullfile(Path.GROUND_TRUTH_DIR, filename), '-struct', 'params');
+            clear('params');
+        end
+    end
 end
