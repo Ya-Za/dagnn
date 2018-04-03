@@ -21,4 +21,5 @@ octave-workspace
 *.mat
 
 # `results` folder
-data/ep20c11/noisy/results/
+assets/ep20c11/noisy/results/
+

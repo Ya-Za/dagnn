@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>CNN of Retina</title>
+    <style>
+        /* Images */
+        
+        img {
+            width: 80%
+        }
+        /* Headings */
+        
+        h2 {
+            background-color: #EEF;
+            padding: 5px;
+        }
+        
+        h3 {
+            background-color: #DDF;
+            padding: 5px;
+        }
+        /* TOC */
+        
+        #toc a {
+            text-decoration: none;
+        }
+        
+        #toc a:link {
+            color: blue;
+        }
+        
+        #toc a:visited {
+            color: blue;
+        }
+        
+        #toc a:hover {
+            font-weight: bold;
+            color: navy;
+        }
+        
+        #toc a:active {
+            font-weight: bold;
+            color: navy;
+        }
+    </style>
+</head>
+
+<body>
+    <center>
+        <h1>CNN Models of the Retinal Response to White-Noise</h1>
+    </center>
+
+    <h2 id="contents">Contents</h2>
+    <div id="toc"></div>
+    <hr>
+
+    <h2 id="data">Data</h2>
+    <!--<h3 id="stim">Stimulus</h3>
+<img src="./images/stim.svg" style="width: 80%">
+<h3 id="resp">Response</h3>
+<img src="./images/resp.svg">-->
+    <h3 id="db">Stimulus/Response Training Set</h3>
+    <img src="./images/db_all.svg"> <br>
+    <img src="./images/db_first.svg">
+
+    <h2 id="net">Structure of Net</h2>
+    <img src="./images/net.svg">
+
+    <h2 id="costs">Error</h2>
+    <img src="./images/error.svg">
+
+    <h2 id="params">Parameters</h2>
+    <h3 id="filters">Kernels</h3>
+    <img src="./images/bipolar_filter_noisy_noiseless.svg">
+    <img src="./images/filter_bipolar_all.svg">
+    <img src="./images/filter_bipolar_initial_best.svg">
+    <img src="./images/amacrine_filter_noisy_noiseless.svg">
+    <img src="./images/filter_amacrine_all.svg">
+    <img src="./images/filter_amacrine_initial_best.svg">
+    <img src="./images/ganglion_filter_noisy_noiseless.svg">
+    <img src="./images/filter_ganglion_all.svg">
+    <img src="./images/filter_ganglion_initial_best.svg">
+    <h3 id="biases">Biases</h3>
+    <img src="./images/bias_bipolar.svg">
+    <img src="./images/bias_amacrine.svg">
+    <img src="./images/bias_ganglion.svg">
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function (event) {
+            document.querySelectorAll('img').forEach(function (img) {
+                img.onerror = function () { this.style.display = 'none' }
+            })
+        })
+
+        window.onload = function () {
+            wrap_imgs()
+            make_toc()
+        }
+
+        function wrap_imgs() {
+            /*
+            WRAP_IMGS wrappes up <img> tags with <a> and <center> tags 
+            */
+            imgs = document.getElementsByTagName('img')
+            for (let i = 0; i < imgs.length; i++) {
+                // set attribute style="width: 80%"
+                // imgs[i].setAttribute('style', 'width: 80%')
+
+                // wrapped <img> with <a>
+                var element = imgs[i]
+                var parent = element.parentElement
+                var wrapper = document.createElement('a')
+                wrapper.setAttribute('href', element.getAttribute('src'))
+                parent.replaceChild(wrapper, element)
+                wrapper.appendChild(element)
+
+                // wrapped <a> with <center>
+                element = wrapper;
+                parent = element.parentElement;
+                wrapper = document.createElement('center');
+                parent.replaceChild(wrapper, element)
+                wrapper.appendChild(element)
+            }
+        }
+
+        function make_toc() {
+            // read
+            var h2s = document.getElementsByTagName('h2')
+            var ul2 = document.createElement("ul")
+            for (var i = 1; i < h2s.length; i++) {
+                var a = document.createElement("a")
+                a.innerHTML = h2s[i].textContent;
+                a.setAttribute("href", "#" + h2s[i].id)
+
+                var li2 = document.createElement('li')
+                li2.appendChild(a)
+
+                ul2.appendChild(li2);
+            }
+
+            document
+                .getElementById('toc')
+                .appendChild(ul2);
+        }
+    </script>
+
+</body>
+
+</html>

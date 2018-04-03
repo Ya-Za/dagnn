@@ -4,15 +4,12 @@ classdef DagNNNoisy < handle
     properties
         % Properties
         % ----------
-        % - base_props_dir: char vector
-        %   Path of directory containing `base_props` json files
-        % - index_html_path: char vector
-        %   Path of `index.html` file
+        % - noisy_config_dir: char vector
+        %   Path of directory containing `template config` json files
         % - snr: double array (row vector)
         %   Each item is signal to noise ratio in dB.
 
-        base_props_dir;
-        index_html_path;
+        noisy_configs_dir;
         snr;
     end
     
@@ -22,15 +19,20 @@ classdef DagNNNoisy < handle
     
     % Constructor
     methods
-        function obj = DagNNNoisy()
+        function obj = DagNNNoisy(noisy_configs_dir)
             %Constructor
             %
             % Parameters
             % ----------
-            % - 
+            % - noisy_config_dir: char vector
+            %   Path of directory containing `template config` json files 
             
-            obj.base_props_dir = './data/ep20c11/noisy/base_props';
-            obj.index_html_path = './data/ep20c11/noisy/index.html';
+            if (~exist('noisy_configs_dir', 'var'))
+                noisy_configs_dir = Path.NOISY_CONFIGS_DIR;
+            end
+            
+            obj.noisy_configs_dir = noisy_configs_dir;
+            
             obj.snr = [-10];
         end
     end
@@ -44,18 +46,16 @@ classdef DagNNNoisy < handle
             
             run('vl_setupnn.m');
             
-            base_props_filenames = obj.get_base_props_filenames();
-            for i = 1:numel(base_props_filenames)
-                base_props_filename = base_props_filenames{i};
+            noisy_configs_filenames = obj.get_noisy_configs_filenames();
+            for i = 1:numel(noisy_configs_filenames)
+                noisy_configs_filename = noisy_configs_filenames{i};
                 
-                [pathstr, ~, ~] = fileparts(obj.base_props_dir);
-                [~, name, ~] = fileparts(base_props_filename);
+                [~, name, ~] = fileparts(noisy_configs_filename);
                 
                 dt = datetime;
                 dt.Format = 'dd-MMM-uuuu''.''HH-mm-ss';
                 root_dir = fullfile(...
-                    pathstr, ...
-                    'results', ...
+                    Path.RESULTS_DIR, ...
                     sprintf('%s.%s', name, dt) ...
                 );
                 % make dir
@@ -66,34 +66,38 @@ classdef DagNNNoisy < handle
                 % make db
                 db_filename = fullfile(root_dir, Path.DATA_FILENAME);
                 DagNNNoisy.make_db(...
-                    base_props_filename, ...
+                    noisy_configs_filename, ...
                     db_filename ...
                 );
                 
                 for snr_value = obj.snr
+                    % save `snr` to `info.mat`
+                    info = struct();
+                    info.snr = snr_value;
+                    DagNNNoisy.saveToInfo(root_dir, info);
+                    
                     % make params
-                    % todo: save `snr` in `info.mat` file
-                    props = jsondecode(fileread(base_props_filename));
+                    config = jsondecode(fileread(noisy_configs_filename));
                     
                     DagNNNoisy.make_params(...
-                        base_props_filename, ...
+                        noisy_configs_filename, ...
                         root_dir, ...
                         snr_value ...
                     );
 
-                    % make props files
+                    % make config files
                     % todo: change `root dir` based on the following
                     % pattern
-%                     props_filename = fullfile(...
+%                     config_filename = fullfile(...
 %                         root_dir, ...
 %                         sprintf(...
-%                             ['props_' DagNNNoisy.FILENAME_PATTERN '.json'], ...
+%                             ['config_' DagNNNoisy.FILENAME_PATTERN '.json'], ...
 %                             snr_value, ...
-%                             props.learning.batch_size, ...
-%                             props.learning.learning_rate ...
+%                             config.learning.batch_size, ...
+%                             config.learning.learning_rate ...
 %                         ) ...
 %                     );
-                    props_filename = fullfile(...
+                    config_filename = fullfile(...
                             root_dir, ...
                             Path.CONFIG_FILENAME ...
                         );
@@ -102,8 +106,8 @@ classdef DagNNNoisy < handle
 %                         sprintf(...
 %                             ['bak_' DagNNNoisy.FILENAME_PATTERN], ...
 %                             snr_value, ...
-%                             props.learning.batch_size, ...
-%                             props.learning.learning_rate ...
+%                             config.learning.batch_size, ...
+%                             config.learning.learning_rate ...
 %                         ) ...
 %                     );
                     bak_dir = root_dir;
@@ -112,54 +116,53 @@ classdef DagNNNoisy < handle
                         root_dir, ...
                         Path.PARAMS_INITIAL_FILENAME ...
                     );
-                    DagNNNoisy.make_props(...
-                        base_props_filename, ...
+                    DagNNNoisy.make_config(...
+                        noisy_configs_filename, ...
                         db_filename, ...
                         params_initial_filename, ...
                         bak_dir, ...
-                        props_filename ...
+                        config_filename ...
                     );
 
-                    % run props files
-                    DagNNNoisy.run_props(props_filename);
+                    % run config files
+                    DagNNNoisy.run_config(config_filename);
                     
-                    % todo: must be uncommented to show results
                     % make images
-                    DagNNViz.plot_results(props_filename);
+                    DagNNViz.plot_results(config_filename);
                     
 %                     % copy net.svg
 %                     copyfile(...
-%                         fullfile(obj.base_props_dir, [name, '.svg']), ...
+%                         fullfile(obj.noisy_configs_dir, [name, '.svg']), ...
 %                         fullfile(bak_dir, 'images', 'net.svg') ...
 %                     );
                 
-                    % copy index.html
+                    % copy `index.html`
                     copyfile(...
-                        obj.index_html_path, ...
+                        Path.INDEX_HTML_FILENAME, ...
                         bak_dir ...
                     );
                 
                     % plot noisy/noiseless filters
                     viz.output_dir = fullfile(bak_dir, 'images');
                     viz.plot_noisy_params(...
-                        props_filename, ...
-                        props.data.params_filename, ...
+                        config_filename, ...
+                        config.data.params_filename, ...
                         params_initial_filename, ...
                         snr_value ...
                     )
                 end
             end
         end
-        function filenames = get_base_props_filenames(obj)
-            % Get filenames of `base_props` from given directory
+        function filenames = get_noisy_configs_filenames(obj)
+            % Get filenames of `noisy configs` from given directory
             %
             % Returns
             % -------
             % - filenames: cell array of char vectors
-            %   `folder` + `name` of each `base properties` file
+            %   `folder` + `name` of each `noisy configs` file
             
             listing = ...
-                dir(fullfile(obj.base_props_dir, '*.json'));
+                dir(fullfile(obj.noisy_configs_dir, '*.json'));
             
             filenames = arrayfun(...
                 @(x) fullfile(x.folder, x.name), ...
@@ -170,14 +173,14 @@ classdef DagNNNoisy < handle
     end
     
     methods (Static)
-        function make_db(props_filename, db_filename)
-            % Make database based on dag (specivied by `props` file) 
+        function make_db(config_filename, db_filename)
+            % Make database based on dag (specivied by `config` file) 
             % and save it
             %
             % Parameters
             % ----------
-            % - props_filename: char vector
-            %   Path of dag properties file
+            % - config_filename: char vector
+            %   Path of dag config file
             % - db_filename: char vector
             %   Path of output database
             
@@ -185,7 +188,7 @@ classdef DagNNNoisy < handle
                 return;
             end
             
-            cnn = DagNNTrainer(props_filename);
+            cnn = DagNNTrainer(config_filename);
             cnn.init();
 
             % db
@@ -199,13 +202,13 @@ classdef DagNNNoisy < handle
             );
         end
         
-        function make_params(props_filename, root_dir, snr)
+        function make_params(config_filename, root_dir, snr)
             % Add noise to parameters of a dag and save it
             %
             % Parameters
             % ----------
-            % - props_filename: char vector
-            %   Path of dag properties file
+            % - config_filename: char vector
+            %   Path of dag config file
             % - params_filename: char vector
             %   Path of output dag parameters file
             % - snr: double
@@ -220,11 +223,11 @@ classdef DagNNNoisy < handle
             end
             
             % net
-            cnn = DagNNTrainer(props_filename);
+            cnn = DagNNTrainer(config_filename);
             cnn.init();
             
             % load params
-            params = load(cnn.props.data.params_filename);
+            params = load(cnn.config.data.params_filename);
             
             % save
             params_expected_filename = fullfile(...
@@ -251,61 +254,82 @@ classdef DagNNNoisy < handle
             clear('params');
         end
         
-        function make_props(...
-                base_props_filename, ...
+        function make_config(...
+                noisy_config_filename, ...
                 db_filename, ...
                 params_filename, ...
                 bak_dir, ...
-                props_filename ...
+                config_filename ...
             )
-            % Make a dag properties file
+            % Make a dag config file
             %
             % Parameters
             % ----------
-            % - base_props_filename: char vector
-            %   Path of basic properties file
+            % - noisy_config_filename: char vector
+            %   Path of noisy config file
             % - db_filename: char vector
             %   Path of database
             % - parame_filename: char vector
             %   Path of parameters
             % - bak_dir: char vector
             %   Path of backup directory
-            % - props_filename: char vector
-            %   Path of output properties file
+            % - config_filename: char vector
+            %   Path of output config file
             
-            if exist(props_filename, 'file')
+            if exist(config_filename, 'file')
                 return;
             end
             
             % json
             % - decode
-            props = jsondecode(fileread(base_props_filename));
+            config = jsondecode(fileread(noisy_config_filename));
             
             % - db_filename
-            props.data.db_filename = db_filename;
+            config.data.db_filename = db_filename;
 
             % - params_filename
-            props.data.params_filename = params_filename;
+            config.data.params_filename = params_filename;
             
             % - bak_dir
-            props.data.bak_dir = bak_dir;
+            config.data.bak_dir = bak_dir;
             
             % - encode and save
-            file = fopen(props_filename, 'w');
-            fprintf(file, '%s', jsonencode(props));
+            file = fopen(config_filename, 'w');
+            fprintf(file, '%s', jsonencode(config));
             fclose(file);
         end
         
-        function run_props(props_filename)
+        function run_config(config_filename)
             % Run a dag and plot `costs` and `diagraph`
             %
             % Parameters
             % ----------
-            % - props_filename: char vector
-            %   Path of properties for defining dag
+            % - config_filename: char vector
+            %   Path of config file for defining dag
 
-            cnn = DagNNTrainer(props_filename);
+            cnn = DagNNTrainer(config_filename);
             cnn.run();
+        end
+        
+        function saveToInfo(rootDir, info)
+            % Save additional information to `info.mat` file
+            %
+            % Parameters
+            % ----------
+            % - rootDir: cahr vector
+            %   Path of root directory
+            % - info: struct
+            %   Must be added to `info.mat` file
+            
+            filename = fullfile(rootDir, Path.INFO_FILENAME);
+            
+            if exist(filename, 'file')
+                % append
+                save(filename, '-struct', 'info', '-append');
+            else
+                % create
+                save(filename, '-struct', 'info');
+            end
         end
         
         function main()
@@ -322,33 +346,33 @@ classdef DagNNNoisy < handle
     
     % RMSE
     methods (Static)
-        function rmse(propsFilename)
+        function rmse(configFilename)
             % Helper method for calling another functions
             %
             % Parameters
             % ----------
-            % - propsFilename: char vector
-            %   Path of properties for defining dag
+            % - configFilename: char vector
+            %   Path of config file for defining dag
             
             % save `y_`
-            DagNNNoisy.savePredictedOutput(propsFilename);
+            DagNNNoisy.savePredictedOutput(configFilename);
             % save `indexes`
-            DagNNNoisy.saveDBIndexes(propsFilename);
+            DagNNNoisy.saveDBIndexes(configFilename);
         end
         
-        function savePredictedOutput(propsFilename)
+        function savePredictedOutput(configFilename)
             % Make predicted outputs and append the to the `db` as a `y_`
             %
             % Parameters
             % ----------
-            % - propsFilename: char vector
-            %   Path of properties for defining dag
+            % - configFilename: char vector
+            %   Path of config file for defining dag
             
             % setup `matconvnet`
             run('vl_setupnn.m');
             
             % construct and init a dag
-            cnn = DagNNTrainer(propsFilename);
+            cnn = DagNNTrainer(configFilename);
             cnn.init();
             cnn.load_best_val_epoch();
             
@@ -356,29 +380,29 @@ classdef DagNNNoisy < handle
             y_ = cnn.out(cnn.db.x);
             
             % append predicted outputs to the current `db`
-            save(cnn.props.data.db_filename, 'y_', '-append');
+            save(cnn.config.data.db_filename, 'y_', '-append');
         end
         
-        function saveDBIndexes(propsFilename)
+        function saveDBIndexes(configFilename)
             % Append indexes of `train`, `val`, `test` data to the `db`
             %
             % Parameters
             % ----------
-            % - propsFilename: char vector
-            %   Path of properties for defining dag
+            % - configFilename: char vector
+            %   Path of config file for defining dag
             
             % setup `matconvnet`
             run('vl_setupnn.m');
             
             % construct and init a dag
-            cnn = DagNNTrainer(propsFilename);
+            cnn = DagNNTrainer(configFilename);
             cnn.init();
             
             % db indexes
             indexes = cnn.dbIndexes;
             
             % append predicted outputs to the current `db`
-            save(cnn.props.data.db_filename, 'indexes', '-append');
+            save(cnn.config.data.db_filename, 'indexes', '-append');
         end
     end
     

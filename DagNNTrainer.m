@@ -3,8 +3,7 @@ classdef DagNNTrainer < handle
     
     % Properties
     properties
-        % todo: change props to `config`
-        % - props: struct base on `dagnntrainer_schema.json`
+        % - config: struct base on `dagnntrainer_schema.json`
         %   Properties of cnn contains configuration of 'data', 'net'
         %   and 'learning' parameters
         % - db: struct('x', cell array, 'y', cell array)
@@ -35,7 +34,7 @@ classdef DagNNTrainer < handle
         % - elapsed_times: double array
         %   Array of elased times
 
-        props
+        config
         db
         current_epoch
         net
@@ -47,14 +46,14 @@ classdef DagNNTrainer < handle
     
     % Constant Properties
     properties (Constant)
-        % - props_dir: char vector
+        % - config_dir: char vector
         %   Path of properties json files
         % - has_bias: logical
         %   True if `dagnn.Conv` has bias
         % - blocks: struct
         %   Structure of `name` and `handler` of `dagnn` blocks
         
-        props_dir = './data/props';
+        config_dir = './assets/configs';
         has_bias = false;
         % todo: must be documented
         format_spec = struct(...
@@ -77,21 +76,21 @@ classdef DagNNTrainer < handle
     
     % Constructor
     methods
-        function obj = DagNNTrainer(props_filename)
+        function obj = DagNNTrainer(config_filename)
             %Constructor
             %
             % Parameters
             % ----------
-            % - props_filename: char vector
+            % - config_filename: char vector
             %   Path of configuration json file
             
             % print 'Load: ...'
-            [~, filename, ext] = fileparts(props_filename);
+            [~, filename, ext] = fileparts(config_filename);
             DagNNViz.print_title(...
                 sprintf('Load: "%s\" file', [filename, ext])...
             );
             
-            obj.init_props(props_filename);
+            obj.init_config(config_filename);
         end
     end
     
@@ -113,10 +112,10 @@ classdef DagNNTrainer < handle
             [~, index_min_val_cost] = min(obj.costs.val);
             
             n = length(obj.data.train.x);
-            batch_size = obj.props.learning.batch_size;
+            batch_size = obj.config.learning.batch_size;
             
             % epoch loop
-            while obj.current_epoch <= obj.props.learning.number_of_epochs + 1
+            while obj.current_epoch <= obj.config.learning.number_of_epochs + 1
                 begin_time = cputime();
                 % shuffle train data
                 permuted_indexes = randperm(n);
@@ -144,11 +143,11 @@ classdef DagNNTrainer < handle
                     % forward, backward step
                     obj.net.eval(...
                         {...
-                            obj.props.net.vars.input.name, input, ...
-                            obj.props.net.vars.expected_output.name, expected_output
+                            obj.config.net.vars.input.name, input, ...
+                            obj.config.net.vars.expected_output.name, expected_output
                         }, ...
                         {...
-                            obj.props.net.vars.cost.name, 1 ...
+                            obj.config.net.vars.cost.name, 1 ...
                         } ...
                     );
                     
@@ -156,7 +155,7 @@ classdef DagNNTrainer < handle
                     for param_index = 1:length(obj.net.params)
                         obj.net.params(param_index).value = ...
                             obj.net.params(param_index).value - ...
-                            obj.props.learning.learning_rate * obj.net.params(param_index).der;
+                            obj.config.learning.learning_rate * obj.net.params(param_index).der;
                     end
                     
                     % print samples progress
@@ -179,7 +178,7 @@ classdef DagNNTrainer < handle
                 end
                 
                 if (length(obj.costs.val) - index_min_val_cost) >= ...
-                        obj.props.learning.number_of_val_fails
+                        obj.config.learning.number_of_val_fails
                     break;
                 end
                 
@@ -213,11 +212,11 @@ classdef DagNNTrainer < handle
             y = cell(n, 1);
             for i = 1:n
                 obj.net.eval({...
-                    obj.props.net.vars.input.name, x{i} ...
+                    obj.config.net.vars.input.name, x{i} ...
                 });
                 
                 y{i} = obj.net.vars(...
-                    obj.net.getVarIndex(obj.props.net.vars.output.name) ...
+                    obj.net.getVarIndex(obj.config.net.vars.output.name) ...
                 ).value;
             end
         end
@@ -226,8 +225,8 @@ classdef DagNNTrainer < handle
     % Init
     methods
         % todo: handle this in `init_net` method
-        function init_props(obj, filename)
-            % Read `props` from the configuration json file and
+        function init_config(obj, filename)
+            % Read `config` from the configuration json file and
             % refine it such as convert column-vector to row-vector and
             % null to {}
             %
@@ -237,41 +236,41 @@ classdef DagNNTrainer < handle
             %   Path of configuration json file
             
             % decode json
-            obj.props = jsondecode(fileread(filename));
+            obj.config = jsondecode(fileread(filename));
             
             % net (column-vector -> row-vector)
             % - vars
             %   - input
-            obj.props.net.vars.input.size = obj.props.net.vars.input.size';
+            obj.config.net.vars.input.size = obj.config.net.vars.input.size';
             
             %   - output
-            obj.props.net.vars.output.size = obj.props.net.vars.output.size';
+            obj.config.net.vars.output.size = obj.config.net.vars.output.size';
             
             % - params
-            for i = 1:length(obj.props.net.params)
-                obj.props.net.params(i).size = obj.props.net.params(i).size';
+            for i = 1:length(obj.config.net.params)
+                obj.config.net.params(i).size = obj.config.net.params(i).size';
             end
             
             % - layers (column-vector -> row-vector and null -> {})
-            for i = 1:length(obj.props.net.layers)
+            for i = 1:length(obj.config.net.layers)
                 % - inputs
-                if isempty(obj.props.net.layers(i).inputs)
-                    obj.props.net.layers(i).inputs = {};
+                if isempty(obj.config.net.layers(i).inputs)
+                    obj.config.net.layers(i).inputs = {};
                 else
-                    obj.props.net.layers(i).inputs = obj.props.net.layers(i).inputs';
+                    obj.config.net.layers(i).inputs = obj.config.net.layers(i).inputs';
                 end
                 % - outputs
-                if isempty(obj.props.net.layers(i).outputs)
-                    obj.props.net.layers(i).outputs = {};
+                if isempty(obj.config.net.layers(i).outputs)
+                    obj.config.net.layers(i).outputs = {};
                 else
-                    obj.props.net.layers(i).outputs = obj.props.net.layers(i).outputs';
+                    obj.config.net.layers(i).outputs = obj.config.net.layers(i).outputs';
                 end
                 
                 % - params
-                if isempty(obj.props.net.layers(i).params)
-                    obj.props.net.layers(i).params = {};
+                if isempty(obj.config.net.layers(i).params)
+                    obj.config.net.layers(i).params = {};
                 else
-                    obj.props.net.layers(i).params = obj.props.net.layers(i).params';
+                    obj.config.net.layers(i).params = obj.config.net.layers(i).params';
                 end
             end
         end
@@ -304,8 +303,8 @@ classdef DagNNTrainer < handle
             obj.init_elapsed_times();
             
             % bak_dir == 'must_be_removed'
-            if strcmp(obj.props.data.bak_dir, 'must_be_removed')
-                rmdir(obj.props.data.bak_dir, 's');
+            if strcmp(obj.config.data.bak_dir, 'must_be_removed')
+                rmdir(obj.config.data.bak_dir, 's');
             end
         end
         
@@ -314,7 +313,7 @@ classdef DagNNTrainer < handle
             
             % db
             % - load
-            obj.db = load(obj.props.data.db_filename);
+            obj.db = load(obj.config.data.db_filename);
             % - standardize
             obj.standardize_db();
             % - resize
@@ -326,13 +325,13 @@ classdef DagNNTrainer < handle
             
             % db
             % - x
-            if obj.props.learning.standardize_x
+            if obj.config.learning.standardize_x
                 for i = 1 : length(obj.db.x)
                     obj.db.x{i} = normalize(obj.db.x{i});
                 end
             end
             % - y
-            if obj.props.learning.standardize_y
+            if obj.config.learning.standardize_y
                 for i = 1 : length(obj.db.y)
                     obj.db.y{i} = normalize(obj.db.y{i});
                 end
@@ -363,12 +362,12 @@ classdef DagNNTrainer < handle
             
             % resize
             % - db.x
-            input_size = obj.props.net.vars.input.size;
+            input_size = obj.config.net.vars.input.size;
             for i = 1 : length(obj.db.x)
                 obj.db.x{i} = DataUtils.resize(obj.db.x{i}, input_size);
             end
             % - db.y
-            output_size = obj.props.net.vars.output.size;
+            output_size = obj.config.net.vars.output.size;
             for i = 1 : length(obj.db.y)
                 obj.db.y{i} = DataUtils.resize(obj.db.y{i}, output_size);
             end
@@ -377,12 +376,12 @@ classdef DagNNTrainer < handle
         function init_bak_dir(obj)
             % Initialize `bak` directory with `bak_dir`
             
-            if ~exist(obj.props.data.bak_dir, 'dir')
-                mkdir(obj.props.data.bak_dir);
+            if ~exist(obj.config.data.bak_dir, 'dir')
+                mkdir(obj.config.data.bak_dir);
             end
             
             % `epochs` dir
-            epochs_dir = fullfile(obj.props.data.bak_dir, Path.EPOCHS_DIR);
+            epochs_dir = fullfile(obj.config.data.bak_dir, Path.EPOCHS_DIR);
             if ~exist(epochs_dir, 'dir')
                 mkdir(epochs_dir);
             end
@@ -394,11 +393,11 @@ classdef DagNNTrainer < handle
             
             % todo: remove `epoch_` prefix
             list = dir(fullfile(...
-                obj.props.data.bak_dir, ...
+                obj.config.data.bak_dir, ...
                 Path.EPOCHS_DIR, ...
                 '*.mat' ...
             ));
-            % list = dir(fullfile(obj.props.data.bak_dir, 'epoch_*.mat'));
+            % list = dir(fullfile(obj.config.data.bak_dir, 'epoch_*.mat'));
             % todo: [\d] -> \d
             tokens = regexp({list.name}, '(\d+).mat', 'tokens');
             epoch = cellfun(@(x) sscanf(x{1}{1}, '%d'), tokens);
@@ -418,7 +417,7 @@ classdef DagNNTrainer < handle
                 % obj.net.conserveMemory = false;
                 
                 % add layers
-                layers = obj.props.net.layers;
+                layers = obj.config.net.layers;
                 for layer_index = 1:length(layers)
                     layer = layers(layer_index);
                     
@@ -521,9 +520,9 @@ classdef DagNNTrainer < handle
             % ratios
             % todo: must normalize ratios -> ratio/sum_of_rations
             % - train
-            ratios.train = obj.props.learning.train_val_test_ratios(1);
+            ratios.train = obj.config.learning.train_val_test_ratios(1);
             % - test
-            ratios.val = obj.props.learning.train_val_test_ratios(2);
+            ratios.val = obj.config.learning.train_val_test_ratios(2);
             
             % shuffle db
             if exist(obj.get_db_indexes_filename(), 'file')
@@ -567,8 +566,8 @@ classdef DagNNTrainer < handle
         function init_params(obj)
             % Initialize obj.net.params from `params_filename`
             
-            params = obj.props.net.params;
-            weights = load(obj.props.data.params_filename);
+            params = obj.config.net.params;
+            weights = load(obj.config.data.params_filename);
             for i = 1:length(params)
                 name = params(i).name;
                 size = params(i).size;
@@ -583,11 +582,11 @@ classdef DagNNTrainer < handle
             % Set obj.net.meta
             
 %             obj.net.meta = struct(...
-%                 'learning_rate', obj.props.learning.learning_rate, ...
-%                 'batch_size', obj.props.learning.batch_size ...
+%                 'learning_rate', obj.config.learning.learning_rate, ...
+%                 'batch_size', obj.config.learning.batch_size ...
 %             );
 
-            obj.net.meta.learning = obj.props.learning;
+            obj.net.meta.learning = obj.config.learning;
         end
         
         function cost = get_cost(obj, x, y)
@@ -610,12 +609,12 @@ classdef DagNNTrainer < handle
             cost = 0;
             for i = 1:n
                 obj.net.eval({...
-                    obj.props.net.vars.input.name, x{i}, ...
-                    obj.props.net.vars.expected_output.name, y{i} ...
+                    obj.config.net.vars.input.name, x{i}, ...
+                    obj.config.net.vars.expected_output.name, y{i} ...
                 });
                 
                 cost = cost + obj.net.vars(...
-                    obj.net.getVarIndex(obj.props.net.vars.cost.name) ...
+                    obj.net.getVarIndex(obj.config.net.vars.cost.name) ...
                 ).value;
             end
             
@@ -752,8 +751,8 @@ classdef DagNNTrainer < handle
             db.y = cell(number_of_samples, 1);
             
             % - x, y
-            input_size = obj.props.net.vars.input.size;
-            output_size = obj.props.net.vars.output.size;
+            input_size = obj.config.net.vars.input.size;
+            output_size = obj.config.net.vars.output.size;
             for i = 1:number_of_samples
                 db.x{i} = generator(input_size);
                 db.y{i} = generator(output_size);
@@ -761,18 +760,18 @@ classdef DagNNTrainer < handle
             
             % - save
             % todo: save with `-struct` option
-            save(obj.props.data.db_filename, 'db');
+            save(obj.config.data.db_filename, 'db');
             clear('db');
             
             % params
-            params = obj.props.net.params;
+            params = obj.config.net.params;
             % - weights
             weights = struct();
             for i = 1 : length(params)
                 weights.(params(i).name) = generator(params(i).size);
             end
             % - save
-            save(obj.props.data.params_filename, '-struct', 'weights');
+            save(obj.config.data.params_filename, '-struct', 'weights');
             clear('weights');
         end
         
@@ -782,7 +781,7 @@ classdef DagNNTrainer < handle
             
             % db filename
             db_filename = [...
-                obj.props.data.db_filename, ...
+                obj.config.data.db_filename, ...
                 DagNNTrainer.format_spec.change_db_y ...
             ];
         
@@ -813,7 +812,7 @@ classdef DagNNTrainer < handle
             
             % params filename
             params_filename = [...
-                obj.props.data.params_filename, ...
+                obj.config.data.params_filename, ...
                 sprintf(DagNNTrainer.format_spec.noisy_params, snr) ...
             ];
         
@@ -822,7 +821,7 @@ classdef DagNNTrainer < handle
             end
             
             % load
-            params = load(obj.props.data.params_filename);
+            params = load(obj.config.data.params_filename);
             
             % add white Gaussian noise to signal
             for field = fieldnames(params)
@@ -850,7 +849,7 @@ classdef DagNNTrainer < handle
             % - filename: char vector
             
             filename = fullfile(...
-                obj.props.data.bak_dir, ...
+                obj.config.data.bak_dir, ...
                 Path.EPOCHS_DIR, ...
                 sprintf('%d', obj.current_epoch) ...
             );
@@ -861,7 +860,7 @@ classdef DagNNTrainer < handle
             % `bak` directory
             
             filename = fullfile(...
-                obj.props.data.bak_dir, ...
+                obj.config.data.bak_dir, ...
                 Path.COSTS_FILENAME ...
             );
         end
@@ -871,7 +870,7 @@ classdef DagNNTrainer < handle
             % saved file in `bak` directory
             
             filename = fullfile(...
-                obj.props.data.bak_dir, ...
+                obj.config.data.bak_dir, ...
                 Path.DATA_INDEXES_FILENAME ...
             );
         end
@@ -881,7 +880,7 @@ classdef DagNNTrainer < handle
             % saved file in `bak` directory
             
             filename = fullfile(...
-                obj.props.data.bak_dir, ...
+                obj.config.data.bak_dir, ...
                 Path.ELAPSED_TIMES_FILENAME ...
             );
         end
@@ -1030,26 +1029,26 @@ classdef DagNNTrainer < handle
             % setup `matconvnet`
             run('vl_setupnn.m');
             
-            % `props` dir
-            props_dir = DagNNTrainer.props_dir;
+            % `config` dir
+            config_dir = DagNNTrainer.config_dir;
             % properties filenames
-            props_filenames = ...
-                dir(fullfile(props_dir, '*.json'));
-            props_filenames = {props_filenames.name};
+            config_filenames = ...
+                dir(fullfile(config_dir, '*.json'));
+            config_filenames = {config_filenames.name};
             
             % net
-            for i = 1 : length(props_filenames)
-                % props-filename
-                props_filename = fullfile(props_dir, props_filenames{i});
+            for i = 1 : length(config_filenames)
+                % config-filename
+                config_filename = fullfile(config_dir, config_filenames{i});
                 % - define
-                cnn = DagNNTrainer(props_filename);
+                cnn = DagNNTrainer(config_filename);
                 % - run
                 tic();
                 cnn.run();
                 toc();
                 
                 % - plot net
-                DagNNTrainer.plot_digraph(props_filename);
+                DagNNTrainer.plot_digraph(config_filename);
             end
         end
         
