@@ -948,6 +948,7 @@ classdef DagNNViz < handle
                 end
                 
                 % - resize param.values
+                number_of_epochs = min(number_of_epochs, length(param.value));
                 param.value = param.value(1 : number_of_epochs);
                 
                 % new figure
