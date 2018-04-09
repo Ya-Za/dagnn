@@ -228,7 +228,10 @@ classdef DagNNNoisy < handle
             cnn.init();
             
             % load params
-            params = load(cnn.config.data.params_filename);
+            params = struct();
+            for i = 1:length(cnn.net.params)
+                params.(cnn.net.params.name) = cnn.net.params.value;
+            end
             
             % save
             params_expected_filename = fullfile(...
