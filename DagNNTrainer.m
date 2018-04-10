@@ -72,6 +72,7 @@ classdef DagNNTrainer < handle
             'sum', @dagnn.Sum, ...
             'quadcost', @dagnn.PDist ...
         );
+        DEBUG_MODE = false;
     end
     
     % Constructor
@@ -159,7 +160,9 @@ classdef DagNNTrainer < handle
                     end
                     
                     % print samples progress
-                    fprintf('Samples:\t%d-%d/%d\n', start_index, end_index, n);
+                    if DagNNTrainer.DEBUG_MODE
+                        fprintf('Samples:\t%d-%d/%d\n', start_index, end_index, n);
+                    end
                 end
                 
                 % elapsed times
@@ -196,6 +199,7 @@ classdef DagNNTrainer < handle
                 % increament current epoch
                 obj.current_epoch = obj.current_epoch + 1;
             end 
+            DagNNViz.print_title('Done.');
         end
         function y = out(obj, x)
             % Compute `estimated-outputs` of network based on given
