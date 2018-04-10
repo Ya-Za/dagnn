@@ -227,10 +227,10 @@ classdef DagNNNoisy < handle
             cnn = DagNNTrainer(config_filename);
             cnn.init();
             
-            % load params
+            % params
             params = struct();
             for i = 1:length(cnn.net.params)
-                params.(cnn.net.params.name) = cnn.net.params.value;
+                params.(cnn.net.params(i).name) = cnn.net.params(i).value;
             end
             
             % save
