@@ -1319,6 +1319,122 @@ classdef Viz < handle
             end
         end
     end
+    
+    % Plot Expected/Actual Responses
+    methods
+        function plotExpectedActualOutputs(obj, epoch, indexes)
+            % Plot epoch/ground-truth in a grid pattern
+            %
+            % Parameters
+            % ----------
+            % - epoch: number
+            %   Target epoch
+            % - indexes: number[]
+            %   Index of desired samples
+            
+            % plot for all filters
+            if ~exist('indexes', 'var')
+                indexes = 1:obj.N;
+            end
+            
+            if length(indexes) > 100
+                obj.plotExpectedActualOutputs(epoch, indexes(1:100));
+                obj.plotExpectedActualOutputs(epoch, indexes(101:end));
+                return;
+            end
+            
+            % actual response
+            run('vl_setupnn.m');
+            cnn = DagNNTrainer(fullfile(obj.path, Path.CONFIG_FILENAME));
+            % cnn.init();
+            cnn.load_epoch(epoch + 1);
+            Y_ = cnn.out(obj.X);
+            
+            % properties
+            fontsize = 6;
+            expectedColor = Viz.VAL_COLOR;
+            expectedLineWidth = 1.5;
+            minValCostColor = Viz.TEST_COLOR;
+            minValCostLineWidth = 1.5;
+            
+            % number of samples
+            numberOfSamples = length(indexes);
+            
+            % subplot grid
+            [cols, rows] = getColsRows(numberOfSamples);
+            
+            % figure
+            Viz.figure(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch));
+            
+            % plot
+            limits = getLimits();
+            hWaitbar = waitbar(0, 'Plot Expected/Actual Responses...');
+            
+            for index = 1 : numberOfSamples
+                sampleIndex = indexes(index);
+                % sample
+                subplot(rows, cols, index);
+                plot(obj.Y{sampleIndex});
+                hold('on');
+                plot(Y_{sampleIndex});
+                hold('off');
+                
+                setAxis();
+                showTitle(sampleIndex);
+                
+                waitbar(index / numberOfSamples)
+            end
+            close(hWaitbar);
+            
+            % super-title
+            suptitle(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch));
+            
+            % Local Functions
+            function limits = getLimits()
+                xMin = 1;
+                xMax = length(obj.Y{1});
+                yMin = min(min(cellfun(@min, obj.Y)), min(cellfun(@min, Y_)));
+                yMax = max(max(cellfun(@max, obj.Y)), max(cellfun(@max, Y_)));
+                limits = [xMin, xMax, yMin, yMax];
+            end
+            function plotFilterHistoryForAllEpochs()
+                n = 100; % number of epochs in each figure
+                s = 1; % stard epoch
+                f = n; % finish epoch
+                
+                while s < numberOfEpochs
+                    if f > numberOfEpochs
+                        f = numberOfEpochs;
+                    end
+                    
+                    obj.plotFilterHistory(filterName, s:f);
+                    
+                    s = s + n;
+                    f = f + n;
+                end
+            end
+            function [cols, rows] = getColsRows(n)
+                % cols > rows
+                % - cols
+                cols = ceil(sqrt(n));
+                % - rows
+                rows = ceil(n / cols);
+            end
+            function setAxis()
+                axis(limits);
+                
+                ax = gca;
+                ax.XAxisLocation = 'origin';
+                ax.YAxis.Visible = 'off'; 
+                
+                Viz.hideticks();
+            end
+            function showTitle(i)
+                title(num2str(i));
+                set(gca, 'FontSize', fontsize);
+            end
+        end
+    end
         
     % Utils
     methods
