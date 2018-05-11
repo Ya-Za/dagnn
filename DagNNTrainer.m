@@ -955,15 +955,20 @@ classdef DagNNTrainer < handle
                 'elapsed_times' ...
             );
         end
-        function load_best_val_epoch(obj)
-            % Load best validation performance among saved epochs
+        function load_epoch(obj, epoch)
+            % Load target epoch among saved epochs
             
             % update current-epoch
-            [~, obj.current_epoch] = min(obj.costs.val);
+            obj.current_epoch = epoch;
             % init-net
             % todo: efficient way to change the net based on just `currnt
             % epoch`
             obj.init_net();
+        end
+        function load_best_val_epoch(obj)
+            % Load best validation performance among saved epochs
+            
+            obj.load_epoch(min(obj.costs.val));
         end
         function load_current_epoch(obj)
             % Load `net` of current-epoch from `bak`
