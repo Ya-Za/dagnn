@@ -204,6 +204,11 @@ classdef Viz < handle
                 filenames = dir(fullfile(epochsDir, '*.mat'));
                 filenames = {filenames.name};
                 
+                % sort filenames based on number pattern
+                filenums = cellfun(@(x)sscanf(x,'%d.mat'), filenames);
+                [~, I] = sort(filenums);
+                filenames = filenames(I);
+                
                 paramIndexes = Viz.getParamIndexes(fullfile(epochsDir, filenames{1}));
 
                 % param-hsitory
@@ -808,7 +813,7 @@ classdef Viz < handle
                 % Local Functions
                 function drawCircle(cx, cy)
                     circleSize = 75;
-                    scatter(cx - 1, cy, ...
+                    scatter(cx, cy, ...
                         'MarkerEdgeColor', color, ...
                         'SizeData', circleSize, ...
                         'LineWidth', lineWidth ...
@@ -1396,22 +1401,6 @@ classdef Viz < handle
                 yMin = min(min(cellfun(@min, obj.Y)), min(cellfun(@min, Y_)));
                 yMax = max(max(cellfun(@max, obj.Y)), max(cellfun(@max, Y_)));
                 limits = [xMin, xMax, yMin, yMax];
-            end
-            function plotFilterHistoryForAllEpochs()
-                n = 100; % number of epochs in each figure
-                s = 1; % stard epoch
-                f = n; % finish epoch
-                
-                while s < numberOfEpochs
-                    if f > numberOfEpochs
-                        f = numberOfEpochs;
-                    end
-                    
-                    obj.plotFilterHistory(filterName, s:f);
-                    
-                    s = s + n;
-                    f = f + n;
-                end
             end
             function [cols, rows] = getColsRows(n)
                 % cols > rows
