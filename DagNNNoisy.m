@@ -33,7 +33,7 @@ classdef DagNNNoisy < handle
             
             obj.noisy_configs_dir = noisy_configs_dir;
             
-            obj.snr = [-10];
+            obj.snr = [Inf];
         end
     end
     
@@ -63,18 +63,19 @@ classdef DagNNNoisy < handle
                     mkdir(root_dir);
                 end
                 
-                % make db
-                db_filename = fullfile(root_dir, Path.DATA_FILENAME);
-                DagNNNoisy.make_db(...
-                    noisy_configs_filename, ...
-                    db_filename ...
-                );
-                
                 for snr_value = obj.snr
                     % save `snr` to `info.mat`
                     info = struct();
                     info.snr = snr_value;
                     DagNNNoisy.saveToInfo(root_dir, info);
+                    
+                    % make db
+                    db_filename = fullfile(root_dir, Path.DATA_FILENAME);
+                    DagNNNoisy.make_db(...
+                        noisy_configs_filename, ...
+                        db_filename, ...
+                        snr_value ...
+                    );
                     
                     % make params
                     config = jsondecode(fileread(noisy_configs_filename));
@@ -174,7 +175,8 @@ classdef DagNNNoisy < handle
     end
     
     methods (Static)
-        function make_db(config_filename, db_filename)
+        % todo: make this method nonstatic
+        function make_db(config_filename, db_filename, snr)
             % Make database based on dag (specivied by `config` file) 
             % and save it
             %
@@ -194,7 +196,11 @@ classdef DagNNNoisy < handle
 
             % db
             db.x = cnn.db.x;
-            db.y = cnn.out(db.x);
+            if snr == Inf
+                db.y = cnn.db.y;
+            else
+                db.y = cnn.out(db.x);
+            end
             
             % save
             save(...
@@ -203,6 +209,7 @@ classdef DagNNNoisy < handle
             );
         end
         
+        % todo: make this method nonstatic
         function make_params(config_filename, root_dir, snr)
             % Add noise to parameters of a dag and save it
             %
