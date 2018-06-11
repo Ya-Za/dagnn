@@ -1,9 +1,10 @@
 classdef DataUtils < handle
     %DATAUTILS contains data-utilities functions
     
+    
     methods (Static)
-        function output = divide_to_subvectors( input, l, d )
-            %DIVIDE_TO_SUBVECTORS splits input vector to subvectors
+        function output = divide_to_subvectors(input, l, d)
+            % Splits input vector to subvectors
             %
             %   Parameters
             %   ----------
@@ -54,7 +55,7 @@ classdef DataUtils < handle
 %                 i = i + d;
 %             end
         end
-        function output = divide_timeseries( input, dt_sec, l_sec, d_sec)
+        function output = divide_timeseries(input, dt_sec, l_sec, d_sec)
             %DIVIDE_TIMESERIES splits input signal to sub-signals
             %
             %   Parameters
@@ -105,7 +106,7 @@ classdef DataUtils < handle
             d = floor(d_sec / dt_sec);
             output = DataUtils.divide_to_subvectors(input, l, d);
         end
-        function output = divide_to_samelength_subvectors( input, m )
+        function output = divide_to_samelength_subvectors(input, m)
             %DIVIDE_TO_SAMELENGTH_SUBVECTORS splits input vector to same-legnth subvectors
             %
             %   Parameters
@@ -138,7 +139,7 @@ classdef DataUtils < handle
             % divide
             output = divide_to_subvectors(input, l, l);
         end
-        function output = downsample_vector( input, m )
+        function output = downsample_vector(input, m)
             %DOWNSAMPLE_VECTOR donwsample 'input' to 'output' with length 'm'
             %
             %   Parameters
@@ -171,7 +172,7 @@ classdef DataUtils < handle
             input = input(1 : n);
             output = input(1 : d : n);
         end
-        function output = resize( input, output_size, method)
+        function output = resize(input, output_size, method)
             %RESIZE resizes 'input' to 'output' with length 'm'
             %
             %   Parameters
@@ -207,6 +208,304 @@ classdef DataUtils < handle
                 method, ...
                 'Antialiasing', false);
         end
+    end
+    
+    % Make Random Data
+    methods (Static)
+        function make_data(n, l, filename, generator)
+            % Make random `data` file
+            %
+            % Parameters
+            % ----------
+            % - n : int
+            %   number of samples
+            % - l : int
+            %   length of each sample
+            % - filename: char vector
+            %   filename of saved file
+            % - generator : handle function (default is @randn)
+            %   generator function such as `randn`, `rand`, ...
+            
+            % default generator
+            if ~exist('generator', 'var')
+                generator = @randn;
+            end
+            
+            % db
+            data = struct();
+            data.x = cell(n, 1);
+            data.y = cell(n, 1);
+            
+            % - x, y
+            for i = 1:n
+                data.x{i} = generator([l, 1]);
+                data.y{i} = generator([l, 1]);
+            end
+            
+            % - save
+            save(fullfile(Path.DATA_DIR, filename), '-struct', 'data');
+            clear('data');
+        end
+        function transformAndSaveRealData(inFilename)
+            
+            % parameters
+            % - output directory
+            outDirData = './assets/data';
+            outDirParams = './assets/ground-truth';
+%             inputField = 'input_PSTHsmooth';
+%             outputField = 'output_PSTHmoresmooth';
+            inputField = 'input_spksmooth';
+            outputField = 'output_spkmoresmooth';
+            
+            % - length of input sample
+            li = 50;
+            % - length of output sample
+            lo = 26;
+            % - offset between two consecutive data
+            d = 5;
+            % - begin index of data
+            begin = 1;
+            % - scale of output
+            scale = 1;
+            % - max(abs(sample)) must be greater thatn threshold
+            th = 0.1;
+
+            % make data
+            data = load(inFilename);
+            
+            % divide input
+            input = data.(inputField)(begin:end);
+            % - make zero mean, unit variance
+            input = (input - mean(input)) / std(input);
+            input = DataUtils.divide_to_subvectors(input, li, d);
+            
+            x = num2cell(input', 1)';
+            
+            % divide output
+            output = data.(outputField)(begin:end);
+            output = DataUtils.divide_to_subvectors(output, li, d) * scale;
+            y = num2cell(output', 1)';
+            
+            y = cellfun(@(s) s(1:lo), y, 'UniformOutput', false);
+            
+            % filter x, y
+            v = cellfun(@(s) max(abs(s)), y);
+            i = find(v > th);
+            x = x(i);
+            y = y(i);
+            
+            
+            % save db
+            [~, name, ~] = fileparts(inFilename);
+            outFilename = fullfile(outDirData, name);
+            save(outFilename, 'x', 'y');
+            
+            % make parameters
+            % b_A
+            b_A = 0;
+            % b_B
+            b_B = 0;
+            % b_G
+            b_G = 0;
+            
+            % w_A
+            w_A = data.FA_ds(:);
+            w_A = w_A(end:-1:1);
+            % w_B
+            w_B = data.FB_ds(:);
+            w_B = w_B(end:-1:1);
+            % w_G
+            w_G = 1;
+            
+            % - save
+            outFilename = fullfile(outDirParams, name);
+            save(outFilename, 'b_A', 'b_B', 'b_G', 'w_A', 'w_B', 'w_G');
+        end
+        function B = model1(w_B, b_B)
+            % B
+            % - linear
+            BL = @(x) conv(x, w_B, 'valid') + b_B;
+            % - nonlinear
+            BN = @(x) max(0, x);
+            % - LN
+            B = @(x) BN(BL(x));
+        end
+        function G = model2(w_B, b_B, w_A, w_G, b_G)
+            % B
+            % - linear
+            BL = @(x) conv(x, w_B, 'valid') + b_B;
+            % - nonlinear
+            BN = @(x) max(0, x);
+            % - LN
+            B = @(x) BN(BL(x));
+            
+            % A
+            % - linear
+            AL = @(x) conv(x, w_A, 'valid');
+            % - nonlinear
+            AN = @(x) x;
+            % - LN
+            A = @(x) AN(AL(x));
+            
+            % G
+            % - linear
+            GL = @(x) w_G * (B(x) - A(x)) + b_G;
+            % - nonlinear
+            GN = @(x) max(0, x);
+            % - LN
+            G = @(x) GN(GL(x)); 
+        end
+        function G = model3(w_B, w_A, b_A, w_G, b_G)
+            % B
+            % - linear
+            BL = @(x) conv(x, w_B, 'valid');
+            % - nonlinear
+            BN = @(x) x;
+            % - LN
+            B = @(x) BN(BL(x));
+            
+            % A
+            % - linear
+            AL = @(x) conv(x, w_A, 'valid') + b_A;
+            % - nonlinear
+            AN = @(x) logsig(x);
+            % - LN
+            A = @(x) AN(AL(x));
+            
+            % G
+            % - linear
+            GL = @(x) w_G * (B(x) .* A(x)) + b_G;
+            % - nonlinear
+            GN = @(x) max(0, x);
+            % - LN
+            G = @(x) GN(GL(x));
+        end
+        function G = model4(w_B, b_B, w_A, b_A, w_G, b_G)
+            % B
+            % - linear
+            BL = @(x) conv(x, w_B, 'valid') + b_B;
+            % - nonlinear
+            BN = @(x) max(0, x);
+            % - LN
+            B = @(x) BN(BL(x));
+            
+            % A
+            % - linear
+            AL = @(x) conv(x, w_A, 'valid') + b_A;
+            % - nonlinear
+            AN = @(x) logsig(x);
+            % - LN
+            A = @(x) AN(AL(x));
+            
+            % G
+            % - linear
+            GL = @(x) w_G * (B(x) .* A(x)) + b_G;
+            % - nonlinear
+            GN = @(x) max(0, x);
+            % - LN
+            G = @(x) GN(GL(x)); 
+        end
+        function makeAndSaveExpectedOutputs(dataFilename, paramsFilename, outFilename)
+            % data
+            data = load(dataFilename);
+            x = data.x;
+            y = data.y;
+            
+            % parameters
+            params = load(paramsFilename);
+            w_B = params.w_B;
+            b_B = params.b_B;
+            w_A = params.w_A;
+            b_A = params.b_A;
+            w_G = params.w_G;
+            b_G = params.b_G;
+            
+            % models
+            f1 = DataUtils.model1(w_B, b_B);
+            f2 = DataUtils.model2(w_B, b_B, w_A, w_G, b_G);
+            f3 = DataUtils.model3(w_B, w_A, b_A, w_G, b_G);
+            f4 = DataUtils.model4(w_B, b_B, w_A, b_A, w_G, b_G);
+            
+            % expected outputs
+            y1 = out(f1);
+            y2 = out(f2);
+            y3 = out(f3);
+            y4 = out(f4);
+            
+            % save
+            save(outFilename, 'x', 'y', 'y1', 'y2', 'y3', 'y4');
+            
+            % Local Functions
+            function y = out(f)
+                y = cellfun(f, x, 'UniformOutput', false);
+            end
+        end
+    end
+    
+    % Make Random Parameters
+    methods (Static)
+        function make_params(l, filename)
+            % Make random `data` file
+            %
+            % Parameters
+            % ----------
+            % - l : int vector
+            %   length of each sample
+            % - filename: char vector
+            %   filename of saved file
+            
+            params = struct();
+            % b_A
+            params.b_A = 0;
+            % b_B
+            params.b_B = 0;
+            % b_G
+            params.b_G = 0;
+            
+            x = linspace(0, 2 * pi, l)';
+            % w_A
+            params.w_A = -sin(x);
+            % w_B
+            params.w_B = sin(x);
+            % w_G
+            params.w_G = cos(x);
+            
+            % - save
+            save(fullfile(Path.GROUND_TRUTH_DIR, filename), '-struct', 'params');
+            clear('params');
+        end
+    end
+    
+    % Error
+    methods (Static)
+        function e = error(x, y, f, d)
+            % Compute averaged error of a model
+            
+            % Parameters
+            % ----------
+            % - x: number[][]
+            %   Input
+            % - y: number[][]
+            %   Output
+            % - f: (x: number[]) => number[]
+            %   Model
+            % - d: (y: number[], y_: number[]) => number
+            %   Distance
+            
+            if ~exist('d', 'var')
+                d = @(u, v) norm(u - v);
+            end
+            
+            e = mean(...
+                arrayfun(...
+                    @(i) d(y{i}, f(x{i})), ...
+                    1:length(x)...
+                )...
+            );
+        end
+    end
+    
+    methods (Static)
         function kernel = make_gaussian_kernel( n, sigma )
             %MAKE_GAUSSIAN_KERNEL makes 1d gaussian kernel
             %
@@ -391,74 +690,6 @@ classdef DataUtils < handle
         function mkdata_test()
             opts_path = './mkdata.json';
             DataUtils.mkdata(jsondecode(fileread(opts_path)));
-        end
-    end
-    
-    % Make Data, Params
-    methods (Static)
-        function make_data(n, l, filename, generator)
-            % Make random `data` file
-            %
-            % Parameters
-            % ----------
-            % - n : int
-            %   number of samples
-            % - l : int vector
-            %   length of each sample
-            % - filename: char vector
-            %   filename of saved file
-            % - generator : handle function (default is @randn)
-            %   generator function such as `randn`, `rand`, ...
-            
-            % default generator
-            if ~exist('generator', 'var')
-                generator = @randn;
-            end
-            
-            % db
-            data = struct();
-            data.x = cell(n, 1);
-            data.y = cell(n, 1);
-            
-            % - x, y
-            for i = 1:n
-                data.x{i} = generator([l, 1]);
-                data.y{i} = generator([l, 1]);
-            end
-            
-            % - save
-            save(fullfile(Path.DATA_DIR, filename), '-struct', 'data');
-            clear('data');
-        end
-        function make_params(l, filename)
-            % Make random `data` file
-            %
-            % Parameters
-            % ----------
-            % - l : int vector
-            %   length of each sample
-            % - filename: char vector
-            %   filename of saved file
-            
-            params = struct();
-            % b_A
-            params.b_A = 0;
-            % b_B
-            params.b_B = 0;
-            % b_G
-            params.b_G = 0;
-            
-            x = linspace(0, 2 * pi, l)';
-            % w_A
-            params.w_A = -sin(x);
-            % w_B
-            params.w_B = sin(x);
-            % w_G
-            params.w_G = cos(x);
-            
-            % - save
-            save(fullfile(Path.GROUND_TRUTH_DIR, filename), '-struct', 'params');
-            clear('params');
         end
     end
 end
