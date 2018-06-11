@@ -87,6 +87,10 @@ classdef Viz < handle
         %   Contains 'train', 'val' and 'test' costs
         % - paramNames: cell array
         %   Name of parameters
+        % - filterNames: cell array
+        %   Name of filters
+        % - biasNames: cell array
+        %   Name of bias parameters
         % - params: struct(...
         %       'name', struct(...
         %           'expected', double array, ...
@@ -94,19 +98,25 @@ classdef Viz < handle
         %           'history', cell array ...
         %   )
         %   Expected, initial and history of parameters
+        % - dag: DagNNTrainer
+        %   Directed acyclic graph network
         
         path
         config
         X
         Y
         N
+        numOfEpochs
         stimulus
         response
         learningParams
         dataIndexes
         costs
         paramNames
+        filterNames
+        biasNames
         params
+        dag
     end
     
     % Constructor
@@ -130,6 +140,7 @@ classdef Viz < handle
             obj.Y = data.y;
             
             obj.N = min(length(obj.X), length(obj.Y));
+            obj.initNumOfEpochs();
             
             obj.stimulus = vertcat(obj.X{:});
             obj.response = vertcat(obj.Y{:});
@@ -140,7 +151,15 @@ classdef Viz < handle
             obj.costs = load(fullfile(path, Path.COSTS_FILENAME));
             
             obj.initParamNames();
+            obj.initFilterNames();
+            obj.initBiasNames();
             obj.initParams();
+            obj.initDag();
+        end
+        function initNumOfEpochs(obj)
+            epochsDir = fullfile(obj.path, Path.EPOCHS_DIR);
+            filenames = dir(fullfile(epochsDir, '*.mat'));
+            obj.numOfEpochs = length(filenames);
         end
         function initLearningParams(obj)
             % Init `learningParams` property
@@ -167,13 +186,60 @@ classdef Viz < handle
             %   Path of data directory
             
             % load shuffled data indexes
-            obj.dataIndexes = load(...
+            obj.dataIndexes = struct();
+            indexes = load(...
                 fullfile(obj.path, Path.DATA_INDEXES_FILENAME) ...
             );
+            indexes = indexes.db_indexes;
+        
+            % number of samples
+            n = obj.N;
+            
+            % ratios
+            ratios = obj.learningParams.trainValTestRatios;
+            ratios = ratios / sum(ratios);
+            
+            % end index
+            % - train
+            endIndexTrain = floor(ratios(1) * n);
+            % - val
+            endIndexVal = floor((ratios(1) + ratios(2)) * n);
+            % - test
+            endIndexTest = n;
+            
+            % data
+            % - train
+            obj.dataIndexes.train = sort(indexes(1:endIndexTrain));
+            
+            % - val
+            obj.dataIndexes.val = sort(indexes(endIndexTrain + 1:endIndexVal));
+            
+            % - test
+            obj.dataIndexes.test = sort(indexes(endIndexVal + 1:endIndexTest));
         end
         function initParamNames(obj)
             % parameters names
             obj.paramNames = {obj.config.net.params.name};
+        end
+        function initFilterNames(obj)
+            parameters = obj.config.net.params;
+            obj.filterNames = {};
+            for i = 1:length(parameters)
+                % bias names has only one element
+                if prod(parameters(i).size) > 1
+                    obj.filterNames{end + 1} = parameters(i).name;
+                end
+            end
+        end
+        function initBiasNames(obj)
+            parameters = obj.config.net.params;
+            obj.biasNames = {};
+            for i = 1:length(parameters)
+                % bias names has only one element
+                if prod(parameters(i).size) == 1
+                    obj.biasNames{end + 1} = parameters(i).name;
+                end
+            end
         end
         function initParams(obj)
             initParmsExpected();
@@ -235,6 +301,13 @@ classdef Viz < handle
                     );
                 end
             end
+        end
+        function initDag(obj)
+            run('vl_setupnn.m');
+            obj.dag = DagNNTrainer(fullfile(obj.path, Path.CONFIG_FILENAME));
+            obj.dag.init();
+            [~, epoch] = min(obj.costs.val);
+            obj.dag.load_epoch(epoch);
         end
     end
     
@@ -906,6 +979,215 @@ classdef Viz < handle
                 end
             end
         end
+        function [train, val, test] = error(obj, d)
+            % error for `train`, `validation` and `test` datasets
+            train = getError(...
+                obj.X(obj.dataIndexes.train), ...
+                obj.Y(obj.dataIndexes.train) ...
+            );
+            val = getError(...
+                obj.X(obj.dataIndexes.val), ...
+                obj.Y(obj.dataIndexes.val) ...
+            );
+            test = getError(...
+                obj.X(obj.dataIndexes.test), ...
+                obj.Y(obj.dataIndexes.test) ...
+            );
+            
+            % Local Functions
+            function err = getError(x, y)
+                % number of epochs
+                n = obj.numOfEpochs;
+                
+                % error
+                err = zeros(n, 1);
+                for epoch = 1:n
+                    obj.dag.load_epoch(epoch);
+                    y_ = obj.dag.out(x);
+                    
+                    err(epoch) = mean(...
+                        arrayfun(...
+                            @(i) d(y{i}, y_{i}), ...
+                            1:length(x)...
+                        )...
+                    );
+                end
+            end
+        end
+        function plotErrors(obj, d)
+            % Properties
+            lineWidth = 2;
+            yScale = 'log';
+            
+            [train, val, test] = obj.error(d);
+            epochs = 0:(length(train) - 1);
+            
+            plotTrainValTestErrors();
+            setAxes();
+            
+            % Local Functions
+            function plotTrainValTestErrors()
+                % figure
+                Viz.figure('CNN - Errors [Training, Validation, Test]');
+                % - train
+                plot(epochs, train, ...
+                    'LineWidth', lineWidth, ...
+                    'Color', Viz.TRAIN_COLOR ...
+                );
+                set(gca, 'YScale', yScale);
+                hold('on');
+                % - validation
+                plot(epochs, val, ...
+                    'LineWidth', lineWidth, ...
+                    'Color', Viz.VAL_COLOR ...
+                );
+                % - test
+                plot(epochs, test, ...
+                    'LineWidth', lineWidth, ...
+                    'Color', Viz.TEST_COLOR ...
+                );
+                hold('off');
+            end
+            function setAxes()
+                setTicks();
+                % setAxesLocations();
+                setLabels();
+                setTitle();
+                setLegend();
+                grid('on');
+                box('off');
+                
+                % Local Functions
+                function setTicks()
+                    % ticks
+                    % - x
+                    set(gca, ...
+                        'XTick', unique([0, epochs(end)]) ...
+                    );
+                    % - y
+%                     set(gca, ...
+%                         'YTick', ...
+%                         unique(sort([...
+%                             0, ...
+%                             max([train, val, test]) ...
+%                         ])) ...
+%                     );
+                end
+                function setLabels()
+                    % labels
+                    xlabel('Epoch');
+                    ylabel('Error');
+                end
+                function setTitle()
+                    % title
+                    title(func2str(d));
+                end
+                function setLegend()
+                    % legend
+                    legend('Training', 'Validation', 'Test');
+                end
+            end
+        end
+    end
+    
+    % Plot Bias
+    methods
+        function plotBias(obj, biasName)
+            
+            % plot for all filters
+            if ~exist('biasName', 'var')
+                plotBiasAll();
+
+                return;
+            end
+            
+            % parameters
+            lineWidth = 1.5;
+            markerSize = 20;
+            markerColor = [0.8500, 0.3250, 0.0980];
+            hlineColor = [0.4660, 0.6740, 0.1880];
+            
+            bias = obj.params.(biasName);
+            
+            y = [bias.history{:}];
+            x = 0 : (length(y) - 1);
+            
+            xMin = min(x);
+            xMax = max(x);
+            yMin = min(y);
+            yMax = max(y);
+            xBest = bias.minValCost.index - 1;
+            yBest = y(bias.minValCost.index);
+            
+            if xMax == xMin
+                xMax = xMax + eps;
+            end
+            if yMax == yMin
+                yMax = yMax + eps;
+            end
+            
+            % figure
+            Viz.figure(sprintf('Filter: %s', biasName));
+            % plot history
+            plot(x, y, 'LineWidth', lineWidth);
+            title(biasName);
+            xlabel('Epoch');
+            hold('on');
+            % expected value (horizontal line)
+            drawHorizontalLine(bias.expected);
+            % plot circle
+            drawCircle(xBest, yBest);
+            hold('off');
+            % axis
+            setAxes();
+
+            % Local Functions
+            function plotBiasAll()
+                for i = 1:length(obj.biasNames)
+                    biasName = obj.biasNames{i};
+                    obj.plotBias(biasName);
+                end
+            end
+            function drawCircle(cx, cy)
+                plot(...
+                    cx, ...
+                    cy, ...
+                    'Color', markerColor, ...
+                    'Marker', '.', ...
+                    'MarkerSize', markerSize ...
+                );
+            end
+            function drawHorizontalLine(y)
+                ax = gca;
+                line(...
+                    ax.XLim, ...
+                    [y, y], ...
+                    'Color', hlineColor, ...
+                    'LineStyle', ':', ...
+                    'LineWidth', lineWidth ...
+                );
+            end
+            function setAxes()
+                % grid
+                grid('on');
+                box('off');
+
+                % ticks
+                % - x
+                %todo: writ `threeticks` method
+                set(gca, ...
+                    'XTick', ...
+                    unique([xMin, xBest, xMax]) ...
+                );
+                xlim([xMin, xMax]);
+                % - y
+                set(gca, ...
+                    'YTick', ...
+                    unique([yMin, yBest, yMax]) ...
+                );
+                ylim([yMin, yMax]);
+            end
+        end
     end
     
     % Plot Filters
@@ -915,14 +1197,7 @@ classdef Viz < handle
             
             % play all filters
             if ~exist('filterName', 'var')
-                for i = 1:length(obj.paramNames)
-                    paramName = obj.paramNames{i};
-                    
-                    % filter names start with `w`
-                    if paramName(1) == 'w'
-                        obj.playFilterVideo(paramName);
-                    end
-                end
+                playFilterVideoAll();
                 
                 return;
             end
@@ -934,6 +1209,15 @@ classdef Viz < handle
             
             Viz.playVideo(filterVideoFilename);
             fprintf('Video path: ''%s\''', filterVideoFilename);
+            
+            % Local Functions
+            function playFilterVideoAll()
+                for i = 1:length(obj.filterNames)
+                    filterName = obj.paramNames{i};
+                    obj.playFilterVideo(filterName);
+                end
+            end
+            
         end
         function filterVideoFilename = getFilterVideoFilename(obj, filterName)
             filterVideoFilename = fullfile(...
@@ -969,13 +1253,9 @@ classdef Viz < handle
             
             % Local Functions
             function plotFilterAll()
-                for i = 1:length(obj.paramNames)
-                    paramName = obj.paramNames{i};
-                    
-                    % filter names start with `w`
-                    if paramName(1) == 'w'
-                        obj.plotFilter(paramName);
-                    end
+                for i = 1:length(obj.filterNames)
+                    filterName = obj.filterNames{i};
+                    obj.plotFilter(filterName);
                 end
             end
             function plotFilterExpected()
@@ -1180,6 +1460,12 @@ classdef Viz < handle
                 yMax = max(yMax, max(obj.params.(filterName).history{i}));
             end
             
+            if xMax == xMin
+                xMax = xMax + eps;
+            end
+            if yMax == yMin
+                yMax = yMax + eps;
+            end
             limits = [xMin, xMax, yMin, yMax];
         end
         
@@ -1325,6 +1611,14 @@ classdef Viz < handle
         end
     end
     
+    % Plot Parameters
+    methods
+        function plotParameters(obj)
+            obj.plotBias();
+            obj.plotFilter();
+        end
+    end
+    
     % Plot Expected/Actual Responses
     methods
         function plotExpectedActualOutputs(obj, epoch, indexes)
@@ -1337,9 +1631,15 @@ classdef Viz < handle
             % - indexes: number[]
             %   Index of desired samples
             
+            % plot for epoch with min validation cost
+            if ~exist('epoch', 'var')
+                [~, epoch] = min(obj.costs.val);
+            end
+            
             % plot for all filters
             if ~exist('indexes', 'var')
-                indexes = 1:obj.N;
+                % indexes = 1:obj.N;
+                indexes = 1:min(100, obj.N);
             end
             
             if length(indexes) > 100
@@ -1349,11 +1649,8 @@ classdef Viz < handle
             end
             
             % actual response
-            run('vl_setupnn.m');
-            cnn = DagNNTrainer(fullfile(obj.path, Path.CONFIG_FILENAME));
-            % cnn.init();
-            cnn.load_epoch(epoch + 1);
-            Y_ = cnn.out(obj.X);
+            obj.dag.load_epoch(epoch);
+            Y_ = obj.dag.out(obj.X);
             
             % properties
             fontsize = 6;
@@ -1369,7 +1666,7 @@ classdef Viz < handle
             [cols, rows] = getColsRows(numberOfSamples);
             
             % figure
-            Viz.figure(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch));
+            Viz.figure(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch - 1));
             
             % plot
             limits = getLimits();
@@ -1392,7 +1689,7 @@ classdef Viz < handle
             close(hWaitbar);
             
             % super-title
-            suptitle(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch));
+            suptitle(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch - 1));
             
             % Local Functions
             function limits = getLimits()
