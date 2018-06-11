@@ -28,3 +28,6 @@ assets/
 
 # Matlab live editor files
 *.mlx
+
+# todo file
+2do.md
