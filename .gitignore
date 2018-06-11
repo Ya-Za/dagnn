@@ -25,3 +25,6 @@ assets/results/
 
 # `assets` folder
 assets/
+
+# Matlab live editor files
+*.mlx
