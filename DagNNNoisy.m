@@ -254,7 +254,8 @@ classdef DagNNNoisy < handle
             fields = fieldnames(params);
             for i = 1 : length(fields)
                 params.(fields{i}) = ...
-                    awgn(params.(fields{i}), snr, 'measured');
+                    awgn(params.(fields{i}), snr);
+                    % awgn(params.(fields{i}), snr, 'measured');
             end
 
             % save
