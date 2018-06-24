@@ -542,9 +542,9 @@ classdef DagNNTrainer < handle
             
             % end index
             % - train
-            end_index.train = floor(ratios.train * n);
+            end_index.train = ceil(ratios.train * n);
             % - val
-            end_index.val = floor((ratios.train + ratios.val) * n);
+            end_index.val = ceil((ratios.train + ratios.val) * n);
             % - test
             end_index.test = n;
             
