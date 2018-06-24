@@ -6,6 +6,8 @@ classdef Path < handle
         % ----------
         % - EPOCHS_DIR: char vector
         %   Epochs directory
+        % - FIGURES_DIR: char vector
+        %   Figures directory
         % - VIDEOS_DIR: char vector
         %   Videos directory
         % - CONFIG_FILENAME: char vector
@@ -34,6 +36,7 @@ classdef Path < handle
         %   Ground truth directory
         
         EPOCHS_DIR = 'epochs';
+        FIGURES_DIR = 'figures';
         VIDEOS_DIR = 'vidoes';
         
         CONFIG_FILENAME = 'config.json';
