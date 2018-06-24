@@ -252,21 +252,24 @@ classdef DataUtils < handle
             % - output directory
             outDirData = './assets/data';
             outDirParams = './assets/ground-truth';
-%             inputField = 'input_PSTHsmooth';
-%             outputField = 'output_PSTHmoresmooth';
-            inputField = 'input_spksmooth';
-            outputField = 'output_spkmoresmooth';
+            inputField = 'input_PSTHsmooth';
+            outputField = 'output_PSTHmoresmooth';
+%             inputField = 'input_spksmooth';
+%             outputField = 'output_spkmoresmooth';
             
             % - length of input sample
             li = 50;
+            li = 2000;
             % - length of output sample
             lo = 26;
+            lo = 1976;
             % - offset between two consecutive data
             d = 5;
+            d = li;
             % - begin index of data
             begin = 1;
             % - scale of output
-            scale = 1;
+            scale = 0.1;
             % - max(abs(sample)) must be greater thatn threshold
             th = 0.1;
 
