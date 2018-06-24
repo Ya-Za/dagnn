@@ -31,6 +31,8 @@ classdef Viz < handle
         %   Title of response
         % - ROUND_DIGITS: int
         %   Rounds to N digits
+        % - FORMATTYPE: char vector
+        %   File format such as `fig`, `epsc`, `pdf`, `svg`, `png` or ...
         
         DT = 0.001;
         
@@ -48,6 +50,7 @@ classdef Viz < handle
         RESP_TITLE = 'Response';
         
         ROUND_DIGITS = 3;
+        FORMATTYPE = 'fig';
     end
     
     % Data
@@ -155,6 +158,7 @@ classdef Viz < handle
             obj.initBiasNames();
             obj.initParams();
             obj.initDag();
+            obj.initFigDir();
         end
         function initNumOfEpochs(obj)
             epochsDir = fullfile(obj.path, Path.EPOCHS_DIR);
@@ -308,6 +312,12 @@ classdef Viz < handle
             obj.dag.init();
             [~, epoch] = min(obj.costs.val);
             obj.dag.load_epoch(epoch);
+        end
+        function initFigDir(obj)
+            folder = fullfile(obj.path, Path.FIGURES_DIR);
+            if ~exist(folder, 'dir')
+                mkdir(folder)
+            end
         end
     end
     
@@ -478,6 +488,9 @@ classdef Viz < handle
                 'XTick', [], ...
                 'YTick', [] ...
             );
+        
+            % save
+            obj.saveFigure('net');
         end
     end
     
@@ -545,6 +558,9 @@ classdef Viz < handle
                     obj.N ...
                 ) ...
             );
+        
+            % save
+            obj.saveFigure('data');
         
             % Local Functions
             function plotDataAll()
@@ -820,6 +836,9 @@ classdef Viz < handle
             drawCircleAndCrosslines();
             setAxes();
             
+            % save
+            obj.saveFigure('costs');
+            
             % Local Functions
             function setDefaultValues()
                 % default values
@@ -1025,6 +1044,9 @@ classdef Viz < handle
             plotTrainValTestErrors();
             setAxes();
             
+            % save
+            obj.saveFigure('errors');
+            
             % Local Functions
             function plotTrainValTestErrors()
                 % figure
@@ -1140,6 +1162,9 @@ classdef Viz < handle
             hold('off');
             % axis
             setAxes();
+            
+            % save
+            obj.saveFigure(biasName);
 
             % Local Functions
             function plotBiasAll()
@@ -1250,6 +1275,9 @@ classdef Viz < handle
             plotFilterMinError();
             setAxes()
             setTitle();
+            
+            % save
+            obj.saveFigure(filterName);
             
             % Local Functions
             function plotFilterAll()
@@ -1691,6 +1719,9 @@ classdef Viz < handle
             % super-title
             suptitle(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch - 1));
             
+            % save
+            obj.saveFigure('prediction');
+            
             % Local Functions
             function limits = getLimits()
                 xMin = 1;
@@ -1728,6 +1759,41 @@ classdef Viz < handle
             config = jsondecode(fileread(...
                 fullfile(obj.path, obj.CONFIG_FILENAME)...
             ));
+        end
+        function saveFigure(obj, filename)
+            % Save curret figure to file `filename`
+            %
+            % Parameters
+            % ----------
+            % - filename: char vector
+            %   Path of saved figure
+            
+            saveas(...
+                gcf, ...
+                fullfile(obj.path, Path.FIGURES_DIR, filename), ...
+                Viz.FORMATTYPE ...
+            );
+        end
+        function saveData(obj, filename)
+            % data
+            data = struct();
+            % x
+            data.x = obj.X;
+            % y
+            data.y = obj.Y;
+            % y_
+            [~, epoch] = min(obj.costs.val);
+            obj.dag.load_epoch(epoch);
+            data.y_ = obj.dag.out(obj.X);
+            % params
+            names = fieldnames(obj.params);
+            for i = 1:length(names)
+                name = names{i};
+                data.(name) = obj.params.(name).history{epoch};
+            end
+            
+            % save
+            save(filename, '-struct', 'data');
         end
     end
     methods (Static)
