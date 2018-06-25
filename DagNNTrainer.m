@@ -118,89 +118,111 @@ classdef DagNNTrainer < handle
             batch_size = obj.config.learning.batch_size;
             
             % epoch loop
-            while obj.current_epoch <= obj.config.learning.number_of_epochs + 1
-                begin_time = cputime();
-                % shuffle train data
-                permuted_indexes = randperm(n);
-                
-                % batch loop
-                for start_index = 1:batch_size:n
-                    end_index = start_index + batch_size - 1;
-                    if end_index > n
-                        end_index = n;
-                    end
-                    
-                    indexes = permuted_indexes(start_index:end_index);
-                    % make batch data
-                    % - x
-                    input = ...
-                        DagNNTrainer.cell_array_to_tensor(...
-                        obj.data.train.x(indexes) ...
-                    );
-                    % - y
-                    expected_output = ...
-                        DagNNTrainer.cell_array_to_tensor(...
-                        obj.data.train.y(indexes) ...
-                    );
-                    
-                    % forward, backward step
-                    obj.net.eval(...
-                        {...
-                            obj.config.net.vars.input.name, input, ...
-                            obj.config.net.vars.expected_output.name, expected_output
-                        }, ...
-                        {...
-                            obj.config.net.vars.cost.name, 1 ...
-                        } ...
-                    );
-                    
-                    % update step
-                    for param_index = 1:length(obj.net.params)
-                        obj.net.params(param_index).value = ...
-                            obj.net.params(param_index).value - ...
-                            obj.config.learning.learning_rate * obj.net.params(param_index).der;
-                    end
-                    
-                    % print samples progress
-                    if DagNNTrainer.DEBUG_MODE
-                        fprintf('Samples:\t%d-%d/%d\n', start_index, end_index, n);
-                    end
-                end
-                
-                % elapsed times
-                obj.elapsed_times(end + 1) = cputime() - begin_time;
-                % costs
-                % - train
-                obj.costs.train(end + 1) = obj.get_train_cost();
-                % - val
-                obj.costs.val(end + 1) = obj.get_val_cost();
-                % - test
-                obj.costs.test(end + 1) = obj.get_test_cost();
-                
-                % no imporovement in number_of_val_fails steps
-                if obj.costs.val(end) < obj.costs.val(index_min_val_cost)
-                    index_min_val_cost = length(obj.costs.val);
-                end
-                
-                if (length(obj.costs.val) - index_min_val_cost) >= ...
-                        obj.config.learning.number_of_val_fails
+            prefix = 'w';
+            maxEpochs = obj.config.learning.number_of_epochs + 1;
+            maxValFails = obj.config.learning.number_of_val_fails;
+            while obj.current_epoch <= maxEpochs
+                if (length(obj.costs.val) - index_min_val_cost) > ...
+                        maxValFails
                     break;
                 end
                 
-                % print epoch progress
-                obj.print_epoch_progress()
+                while obj.current_epoch <= maxEpochs
+                    begin_time = cputime();
+                    % shuffle train data
+                    permuted_indexes = randperm(n);
+
+                    % batch loop
+                    for start_index = 1:batch_size:n
+                        end_index = start_index + batch_size - 1;
+                        if end_index > n
+                            end_index = n;
+                        end
+
+                        indexes = permuted_indexes(start_index:end_index);
+                        % make batch data
+                        % - x
+                        input = ...
+                            DagNNTrainer.cell_array_to_tensor(...
+                            obj.data.train.x(indexes) ...
+                        );
+                        % - y
+                        expected_output = ...
+                            DagNNTrainer.cell_array_to_tensor(...
+                            obj.data.train.y(indexes) ...
+                        );
+
+                        % forward, backward step
+                        obj.net.eval(...
+                            {...
+                                obj.config.net.vars.input.name, input, ...
+                                obj.config.net.vars.expected_output.name, expected_output
+                            }, ...
+                            {...
+                                obj.config.net.vars.cost.name, 1 ...
+                            } ...
+                        );
+
+                        % update step
+                        for param_index = 1:length(obj.net.params)
+                            if obj.net.params(param_index).name(1) == prefix
+                                obj.net.params(param_index).value = ...
+                                    obj.net.params(param_index).value - ...
+                                    obj.config.learning.learning_rate * obj.net.params(param_index).der;
+                            end
+                        end
+
+                        % print samples progress
+                        if DagNNTrainer.DEBUG_MODE
+                            fprintf('Samples:\t%d-%d/%d\n', start_index, end_index, n);
+                        end
+                    end
+
+                    % elapsed times
+                    obj.elapsed_times(end + 1) = cputime() - begin_time;
+                    % costs
+                    % - train
+                    obj.costs.train(end + 1) = obj.get_train_cost();
+                    % - val
+                    obj.costs.val(end + 1) = obj.get_val_cost();
+                    % - test
+                    obj.costs.test(end + 1) = obj.get_test_cost();
+
+                    % print epoch progress
+                    obj.print_epoch_progress()
+
+                    % save
+                    % - costs
+                    obj.save_costs();
+                    % - elapsed times
+                    obj.save_elapsed_times();
+                    % - net
+                    obj.save_current_epoch();
+
+                    % increament current epoch
+                    obj.current_epoch = obj.current_epoch + 1;
+                    
+                    % no imporovement in number_of_val_fails steps
+                    if obj.costs.val(end) < obj.costs.val(index_min_val_cost)
+                        index_min_val_cost = length(obj.costs.val);
+                    end
+
+                    if (length(obj.costs.val) - index_min_val_cost) >= ...
+                            maxValFails
+                        break;
+                    end
+                end % end of inner while
                 
-                % save
-                % - costs
-                obj.save_costs();
-                % - elapsed times
-                obj.save_elapsed_times();
-                % - net
-                obj.save_current_epoch();
-                
-                % increament current epoch
-                obj.current_epoch = obj.current_epoch + 1;
-            end 
+                % toggle prefix
+                if prefix == 'w'
+                    prefix = 'b';
+                else
+                    prefix = 'w';
+                end
+                disp('******');
+                disp('Toggled');
+                disp('******');
+            end % end of outer while
             DagNNViz.print_title('Done.');
         end
         function y = out(obj, x)
