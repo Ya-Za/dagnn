@@ -324,6 +324,80 @@ classdef DataUtils < handle
             outFilename = fullfile(outDirParams, name);
             save(outFilename, 'b_A', 'b_B', 'b_G', 'w_A', 'w_B', 'w_G');
         end
+        function transformAndSaveRealData2(inFilename)
+
+            % parameters
+            % - output directory
+            outDirData = './assets/data';
+            outDirParams = './assets/ground-truth';
+            
+            inputField = 'input_PSTHsmooth';
+            outputField = 'output_PSTHmoresmooth';
+            % inputField = 'input_spksmooth';
+            % outputField = 'output_spkmoresmooth';
+            
+            % - length of input samples
+            li = [4000, 1000, 1000];
+            % - length of output sample
+            w = 25;
+            lo = li - w + 1;
+            % - begin index of data
+            begin = 1;
+            % - scale of output
+            scale = 0.1;
+            
+            % make data
+            data = load(inFilename);
+            
+            % input, output
+            input = data.(inputField)(begin:end);
+            output = data.(outputField)(begin:end);
+            % - make zero mean, unit variance
+            input = (input - mean(input)) / std(input);
+            
+            % x, y
+            n = length(li);
+            x = cell(n, 1);
+            y = cell(n, 1);
+            startIndex = 1;
+            for i = 1:n
+                endIndex = startIndex + li(i) - 1;
+                
+                x{i} = input(startIndex:endIndex)';
+                
+                y{i} = output(startIndex:endIndex)';
+                y{i} = y{i}(1:lo(i));
+                y{i} = scale * y{i};
+                
+                startIndex = endIndex + 1;
+            end
+            
+            % save db
+            [~, name, ~] = fileparts(inFilename);
+            outFilename = fullfile(outDirData, name);
+            save(outFilename, 'x', 'y');
+            
+            % make parameters
+            % b_A
+            b_A = 0;
+            % b_B
+            b_B = 0;
+            % b_G
+            b_G = 0;
+            
+            % w_A
+            w_A = data.FA_ds(:);
+            w_A = w_A(end:-1:1);
+            % w_B
+            w_B = data.FB_ds(:);
+            w_B = w_B(end:-1:1);
+            % w_G
+            w_G = 1;
+            
+            % - save
+            outFilename = fullfile(outDirParams, name);
+            save(outFilename, 'b_A', 'b_B', 'b_G', 'w_A', 'w_B', 'w_G');
+        end
         function B = model1(w_B, b_B)
             % B
             % - linear
