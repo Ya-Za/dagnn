@@ -126,12 +126,25 @@ classdef DagNNTrainer < handle
             prefix = 'w';
             maxEpochs = obj.config.learning.number_of_epochs + 1;
             maxValFails = obj.config.learning.number_of_val_fails;
+           
+            % maximum number of epochs for the first cycle before switching
+            M1 = ceil(0.1 * maxEpochs);
+            % maximum number of epochs for the other cycles before switching
+            M2 = ceil(0.04 * maxEpochs);
+            % maximum number of epochs before switching
+            maxCycleEpochs = M1;
+            
+            
+            % outer while
             while obj.current_epoch <= maxEpochs
                 if (length(obj.costs.val) - index_min_val_cost) > ...
                         maxValFails
                     break;
                 end
                 
+                % number of epochs in a cylce
+                cycleEpochs = 1;
+                % inner while
                 while obj.current_epoch <= maxEpochs
                     begin_time = cputime();
                     % shuffle train data
@@ -212,11 +225,16 @@ classdef DagNNTrainer < handle
                         index_min_val_cost = length(obj.costs.val);
                     end
 
-                    if (length(obj.costs.val) - index_min_val_cost) >= ...
-                            maxValFails
+                    numberOfFails = length(obj.costs.val) - index_min_val_cost;
+                    if cycleEpochs >= maxCycleEpochs || numberOfFails >= maxValFails
                         break;
                     end
+                    
+                    cycleEpochs = cycleEpochs + 1;
                 end % end of inner while
+                
+                % change maximum number of epochs in a cycle
+                maxCycleEpochs = M2;
                 
                 % toggle prefix
                 if prefix == 'w'
@@ -760,23 +778,23 @@ classdef DagNNTrainer < handle
             % - train_cost: double
             %   Cost of net for `training` data-set
             
-            train_cost = ...
-                obj.get_cost(obj.data.train.x, obj.data.train.y);
+%             train_cost = ...
+%                 obj.get_cost(obj.data.train.x, obj.data.train.y);
             
-%             obj.net.eval(...
-%                 {...
-%                     obj.config.net.vars.input.name, obj.tensor.train.x, ...
-%                     obj.config.net.vars.expected_output.name, obj.tensor.train.y
-%                 }...
-%             );
-%             train_cost = obj.net.vars(...
-%                 obj.net.getVarIndex(obj.config.net.vars.cost.name) ...
-%             ).value;
-%             % normalize
-%             % - across samples
-%             train_cost = train_cost / obj.size.train;
-%             % - across values
-%             train_cost = train_cost / obj.size.output;
+            obj.net.eval(...
+                {...
+                    obj.config.net.vars.input.name, obj.tensor.train.x, ...
+                    obj.config.net.vars.expected_output.name, obj.tensor.train.y
+                }...
+            );
+            train_cost = obj.net.vars(...
+                obj.net.getVarIndex(obj.config.net.vars.cost.name) ...
+            ).value;
+            % normalize
+            % - across samples
+            train_cost = train_cost / obj.size.train;
+            % - across values
+            train_cost = train_cost / obj.size.output;
         end
         
         function val_cost = get_val_cost(obj)
@@ -787,24 +805,24 @@ classdef DagNNTrainer < handle
             % - val_cost: double
             %   Cost of net for `validation` data-set
             
-            val_cost = ...
-                obj.get_cost(obj.data.val.x, obj.data.val.y);
+%             val_cost = ...
+%                 obj.get_cost(obj.data.val.x, obj.data.val.y);
 
-%             obj.net.eval(...
-%                 {...
-%                     obj.config.net.vars.input.name, obj.tensor.val.x, ...
-%                     obj.config.net.vars.expected_output.name, obj.tensor.val.y
-%                 }...
-%             );
-%             val_cost = obj.net.vars(...
-%                 obj.net.getVarIndex(obj.config.net.vars.cost.name) ...
-%             ).value;
-%         
-%             % normalize
-%             % - across samples
-%             val_cost = val_cost / obj.size.val;
-%             % - across values
-%             val_cost = val_cost / obj.size.output;
+            obj.net.eval(...
+                {...
+                    obj.config.net.vars.input.name, obj.tensor.val.x, ...
+                    obj.config.net.vars.expected_output.name, obj.tensor.val.y
+                }...
+            );
+            val_cost = obj.net.vars(...
+                obj.net.getVarIndex(obj.config.net.vars.cost.name) ...
+            ).value;
+        
+            % normalize
+            % - across samples
+            val_cost = val_cost / obj.size.val;
+            % - across values
+            val_cost = val_cost / obj.size.output;
         end
         
         function test_cost = get_test_cost(obj)
@@ -815,24 +833,24 @@ classdef DagNNTrainer < handle
             % - test_cost: double
             %   Cost of net for `testing` data-set
             
-            test_cost = ...
-                obj.get_cost(obj.data.test.x, obj.data.test.y);
+%             test_cost = ...
+%                 obj.get_cost(obj.data.test.x, obj.data.test.y);
 
-%             obj.net.eval(...
-%                 {...
-%                     obj.config.net.vars.input.name, obj.tensor.test.x, ...
-%                     obj.config.net.vars.expected_output.name, obj.tensor.test.y
-%                 }...
-%             );
-%             test_cost = obj.net.vars(...
-%                 obj.net.getVarIndex(obj.config.net.vars.cost.name) ...
-%             ).value;
-%         
-%             normalize
-%             - across samples
-%             test_cost = test_cost / obj.size.test;
-%             - across values
-%             test_cost = test_cost / obj.size.output;
+            obj.net.eval(...
+                {...
+                    obj.config.net.vars.input.name, obj.tensor.test.x, ...
+                    obj.config.net.vars.expected_output.name, obj.tensor.test.y
+                }...
+            );
+            test_cost = obj.net.vars(...
+                obj.net.getVarIndex(obj.config.net.vars.cost.name) ...
+            ).value;
+        
+            % normalize
+            % - across samples
+            test_cost = test_cost / obj.size.test;
+            % - across values
+            test_cost = test_cost / obj.size.output;
         end
     end
     
