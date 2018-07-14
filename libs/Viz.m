@@ -167,7 +167,7 @@ classdef Viz < handle
             obj.initDag();
             obj.initFigDir();
             
-            % obj.initCorr();
+            obj.initCorr();
         end
         function initNumOfEpochs(obj)
             epochsDir = fullfile(obj.path, Path.EPOCHS_DIR);
@@ -756,6 +756,9 @@ classdef Viz < handle
             
             % title
             suptitle('Box Plot of Data (Stimulus, Response)');
+            
+            % save
+            obj.saveFigure('box');
         end
         function boardplotData(obj)
             % Board plot of data
@@ -807,6 +810,9 @@ classdef Viz < handle
                 'Location', 'southoutside', ...
                 'Ticks', [] ...
             );
+        
+            % save
+            obj.saveFigure('board');
         end
     end
     
