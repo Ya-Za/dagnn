@@ -35,6 +35,8 @@ classdef DagNNTrainer < handle
         %   Array of elased times
         % - haveSameSizes: logical
         %   Do data have same sizes?
+        % - updateCycles: cell array of char vectors
+        %   Pattern of update parameters in each cycle of epochs
 
         config
         db
@@ -47,6 +49,7 @@ classdef DagNNTrainer < handle
         costs
         elapsed_times
         haveSameSizes
+        updateCycles
     end
     
     % Constant Properties
@@ -123,22 +126,20 @@ classdef DagNNTrainer < handle
             batch_size = obj.config.learning.batch_size;
             
             % epoch loop
-            prefix = 'w';
             maxEpochs = obj.config.learning.number_of_epochs + 1;
+            
             maxValFails = obj.config.learning.number_of_val_fails;
+            numValFails = 0;
+            
+            numberOfCycles = length(obj.updateCycles);
+            cycleIndex = 1;
            
             % maximum number of epochs for the first cycle before switching
-            M1 = ceil(0.1 * maxEpochs);
-            % maximum number of epochs for the other cycles before switching
-            M2 = ceil(0.04 * maxEpochs);
-            % maximum number of epochs before switching
-            maxCycleEpochs = M1;
-            
+            maxCycleEpochs = ceil(0.05 * maxEpochs);
             
             % outer while
             while obj.current_epoch <= maxEpochs
-                if (length(obj.costs.val) - index_min_val_cost) > ...
-                        maxValFails
+                if numValFails >= numberOfCycles
                     break;
                 end
                 
@@ -183,7 +184,7 @@ classdef DagNNTrainer < handle
 
                         % update step
                         for param_index = 1:length(obj.net.params)
-                            if obj.net.params(param_index).name(1) == prefix
+                            if contains(obj.updateCycles{cycleIndex}, obj.net.params(param_index).name)
                                 obj.net.params(param_index).value = ...
                                     obj.net.params(param_index).value - ...
                                     obj.config.learning.learning_rate * obj.net.params(param_index).der;
@@ -227,24 +228,27 @@ classdef DagNNTrainer < handle
 
                     numberOfFails = length(obj.costs.val) - index_min_val_cost;
                     if cycleEpochs >= maxCycleEpochs || numberOfFails >= maxValFails
+                        if numberOfFails >= maxValFails
+                            numValFails = numValFails + 1;
+                        else
+                            numValFails = 0;
+                        end
                         break;
                     end
                     
                     cycleEpochs = cycleEpochs + 1;
                 end % end of inner while
                 
-                % change maximum number of epochs in a cycle
-                maxCycleEpochs = M2;
-                
-                % toggle prefix
-                if prefix == 'w'
-                    prefix = 'b';
-                else
-                    prefix = 'w';
+                % increament cycle index
+                cycleIndex = cycleIndex + 1;
+                if cycleIndex > numberOfCycles
+                    cycleIndex = 1;
                 end
-                disp('******');
-                disp('Toggled');
-                disp('******');
+                
+                
+                disp('************');
+                disp('Next Cycle');
+                disp('************');
             end % end of outer while
             DagNNViz.print_title('Done.');
         end
@@ -357,6 +361,9 @@ classdef DagNNTrainer < handle
             if strcmp(obj.config.data.bak_dir, 'must_be_removed')
                 rmdir(obj.config.data.bak_dir, 's');
             end
+            
+            % update cycles
+            obj.initUpdateCycles();
         end
         
         function init_db(obj)
@@ -587,8 +594,8 @@ classdef DagNNTrainer < handle
             if exist(obj.get_db_indexes_filename(), 'file')
                 indexes = obj.load_db_indexes();
             else
-                % indexes = randperm(n);
-                indexes = 1:n;
+                indexes = randperm(n);
+                % indexes = 1:n;
                 obj.save_db_indexes(indexes);
             end
             
@@ -729,6 +736,30 @@ classdef DagNNTrainer < handle
                 obj.elapsed_times(1) = 0;
                 obj.save_elapsed_times();
             end
+        end
+        
+        function initUpdateCycles(obj)
+            % general update cycle patterns
+            generalUpdateCycles = {...
+                {'w_B', 'w_G'}, ...
+                {'w_A', 'w_G'}, ...
+                {'b_B', 'b_A', 'b_G'} ...
+            };
+            
+            % parameter names of the model
+            paramNames = [obj.config.net.params.name];
+            
+            % index of cycles which must be ignored
+            obj.updateCycles = {};
+            for i = 1:length(generalUpdateCycles)
+                for j = 1:length(generalUpdateCycles{i})
+                    if contains(paramNames, generalUpdateCycles{i}{j})
+                        obj.updateCycles{end + 1} = strjoin(generalUpdateCycles{i});
+                        break;
+                    end
+                end
+            end
+            
         end
     end
     
