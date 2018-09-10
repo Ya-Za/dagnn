@@ -276,7 +276,6 @@ classdef DataUtils < handle
             % - max(abs(sample)) must be greater thatn threshold
             th = 0.1;
             th = 0.01;
-            th = 0;
 
             % make data
             data = load(inFilename);
