@@ -252,31 +252,31 @@ classdef DataUtils < handle
             % - output directory
             outDirData = './assets/data';
             outDirParams = './assets/ground-truth';
+
 %             inputField = 'input_PSTHsmooth';
 %             outputField = 'output_PSTHmoresmooth';
 %             inputField = 'input_spksmooth';
 %             outputField = 'output_spkmoresmooth';
-            inputField = 'input_ce';
-            outputField = 'output_ce';
-            
+%             inputField = 'input_ce';
+%             outputField = 'output_ce';
+
+            inputField = 'vstim';
+            outputField = 'spk';
+
             % - length of input sample
             li = 50;
-            % li = 2000;
             % - length of output sample
-            lo = 26;
-            % lo = 1976;
+            lo = 1;
             % - offset between two consecutive data
-            d = 5;
+            d = 1;
             % d = li;
             % - begin index of data
             begin = 1;
             % - scale of output
-            scale = 0.1;
             scale = 1;
             % - max(abs(sample)) must be greater thatn threshold
-            th = 0.1;
-            th = 0.01;
-
+            th = 0;
+            
             % make data
             data = load(inFilename);
             
@@ -290,14 +290,17 @@ classdef DataUtils < handle
             
             % divide output
             output = data.(outputField)(begin:end);
-            output = DataUtils.divide_to_subvectors(output, li, d) * scale;
+            
+            % output = DataUtils.divide_to_subvectors(output, li, d) * scale;
+            output = output(li:end)' * scale;
+            
             y = num2cell(output', 1)';
             
             y = cellfun(@(s) s(1:lo), y, 'UniformOutput', false);
             
             % filter x, y
             v = cellfun(@(s) max(abs(s)), y);
-            i = find(v > th);
+            i = find(v >= th);
             x = x(i);
             y = y(i);
             
@@ -316,11 +319,20 @@ classdef DataUtils < handle
             b_G = 0;
             
             % w_A
-            w_A = data.FA_ds(:);
-            w_A = w_A(end:-1:1);
+            try
+                w_A = data.FA_ds(:);
+                w_A = w_A(end:-1:1);
+            catch
+                w_A = randn(li, 1);
+            end
             % w_B
-            w_B = data.FB_ds(:);
-            w_B = w_B(end:-1:1);
+            try
+                w_B = data.FB_ds(:);
+                w_B = w_B(end:-1:1);
+            catch
+                w_B = randn(li, 1);
+            end
+            
             % w_G
             w_G = 1;
             
