@@ -1051,6 +1051,11 @@ classdef Viz < handle
                             1:length(x)...
                         )...
                     );
+                
+                    % NaN -> 0
+                    if isnan(err(epoch))
+                        err(epoch) = 0;
+                    end
                 end
             end
         end
@@ -2065,7 +2070,10 @@ classdef Viz < handle
                 rows = ceil(n / cols);
             end
             function setAxis()
-                axis(limits);
+                try
+                    axis(limits);
+                catch
+                end
                 
                 ax = gca;
                 ax.XAxisLocation = 'origin';
