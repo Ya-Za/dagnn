@@ -2057,14 +2057,25 @@ classdef Viz < handle
             
             for index = 1 : numberOfSamples
                 sampleIndex = indexes(index);
+                
                 % sample
                 subplot(rows, cols, index);
-                plot(obj.Y{sampleIndex});
-                hold('on');
-                plot(Y_{sampleIndex});
-                hold('off');
                 
-                setAxis();
+                if length(obj.Y{sampleIndex}) == 1
+                    % scalar
+                    imagesc([obj.Y{sampleIndex}, Y_{sampleIndex}], [0, 1]);
+                    colormap(gca, 'gray');
+                    set(gca, 'Visible', 'off');
+                else
+                    % vector
+                    plot(obj.Y{sampleIndex});
+                    hold('on');
+                    plot(Y_{sampleIndex});
+                    hold('off');
+
+                    setAxis();
+                end
+                
                 showTitle(sampleIndex);
                 
                 waitbar(index / numberOfSamples)
