@@ -609,7 +609,11 @@ classdef Viz < handle
                 n = (rows * cols) / 2;
             end
             function setAxis()
-                axis(limits);
+                try
+                    axis(limits);
+                catch
+                end
+                
                 set(gca, 'XAxisLocation', 'origin');
                 Viz.hideticks();
                 
@@ -626,9 +630,17 @@ classdef Viz < handle
             end
             function plotResponse(i)
                 subplot(rows, cols, 2 * i);
-                plot(obj.Y{indexes(i)}, 'Color', Viz.RESP_COLOR);
                 
-                setAxis();
+                if length(obj.Y{indexes(i)}) == 1
+                    % scalar
+                    imagesc(obj.Y{indexes(i)}, [0, 1]);
+                    colormap(gca, 'gray');
+                    set(gca, 'Visible', 'off');
+                else
+                    % vector
+                    plot(obj.Y{indexes(i)}, 'Color', Viz.RESP_COLOR);
+                    setAxis();
+                end
             end
             function plotFirstStimulus()
                 plotStimulus(1);
@@ -646,11 +658,18 @@ classdef Viz < handle
                 plotResponse(1);
                 
                 title(Viz.RESP_TITLE);
-                xlabel(Viz.XLABEL);
-                ylabel(Viz.RESP_YLABEL);
-                
                 ax = gca;
-                ax.YAxis.Visible = 'on';
+                
+                if length(obj.Y{indexes(1)}) == 1
+                    ax.Visible = 'on';
+                    ax.XAxis.Visible = 'off';
+                    ax.YAxis.Visible = 'off';
+                else
+                    xlabel(Viz.XLABEL);
+                    ylabel(Viz.RESP_YLABEL);
+                    
+                    ax.YAxis.Visible = 'on';
+                end
                 
                 setTinyFontSize();
             end
