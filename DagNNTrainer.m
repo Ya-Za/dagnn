@@ -264,17 +264,27 @@ classdef DagNNTrainer < handle
             % - y: cell array
             %   Actual output
             
-            n = numel(x);
-            y = cell(n, 1);
-            for i = 1:n
-                obj.net.eval({...
-                    obj.config.net.vars.input.name, x{i} ...
-                });
-                
-                y{i} = obj.net.vars(...
-                    obj.net.getVarIndex(obj.config.net.vars.output.name) ...
-                ).value;
-            end
+%             n = numel(x);
+%             y = cell(n, 1);
+%             for i = 1:n
+%                 obj.net.eval({...
+%                     obj.config.net.vars.input.name, x{i} ...
+%                 });
+%                 
+%                 y{i} = obj.net.vars(...
+%                     obj.net.getVarIndex(obj.config.net.vars.output.name) ...
+%                 ).value;
+%             end
+
+            obj.net.eval({...
+                obj.config.net.vars.input.name, ...
+                DagNNTrainer.cell_array_to_tensor(x) ...
+            });
+        
+            y = obj.net.vars(...
+                obj.net.getVarIndex(obj.config.net.vars.output.name) ...
+            ).value;        
+            y = DagNNTrainer.tensor_to_cell_array(y);
         end
     end
     
@@ -1186,26 +1196,43 @@ classdef DagNNTrainer < handle
             %
             % Parameters
             % ----------
-            % - cell_array: cell_array
-            %   Input cell array
+            % - cell_array: cell array
+            %   Input cell array: m x n x p
+            %
+            % Returns
+            % -------
+            % - tensor: 4-D array
+            %   Output tensor: n x p x 1 x m
             
-            tensor_size = horzcat(...
-                size(cell_array{1}), ...
-                [1, length(cell_array)] ...
-            );
+            m = length(cell_array); % number of observations
+            [n, p] = size(cell_array{1}); % size of first observation
+                       
+            tensor = zeros(n, p, 1, m);
             
-            indexes = cell(1, length(tensor_size));
-            for i = 1:length(tensor_size)
-                indexes{i} = 1:tensor_size(i);
-            end
-            
-            tensor = zeros(tensor_size);
-            for i = 1:length(cell_array)
-                indexes{end} = i;
-                tensor(indexes{:}) = cell_array{i};
+            for i = 1:m
+                tensor(:, :, 1, i) = cell_array{i};
             end
         end
-        
+        function cell_array = tensor_to_cell_array(tensor)
+            % Convert multi-dimensional array to cell array
+            %
+            % Parameters
+            % ----------
+            % - tensor: 4-D array
+            %   Output tensor: n x p x 1 x m
+            %
+            % Returns
+            % -------
+            % - cell_array: cell array
+            %   Input cell array: m x n x p            
+            
+            m = size(tensor, 4);
+            cell_array = cell(m, 1);
+            
+            for i = 1:m
+                cell_array{i} = tensor(:, :, 1, i);
+            end
+        end        
         function obj = load(filename)
             % Load `DagNNTrainer` from file
             
