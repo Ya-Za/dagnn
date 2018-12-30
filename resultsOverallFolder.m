@@ -17,13 +17,24 @@ for folder = folders
     viz = Viz(path);
     
     viz.plotNet();
-    viz.plotData(1:50);
-    viz.plotCosts();
-    viz.plotErrors(@(u, v) corr(u, v));
+    
+	viz.plotData(1:50);
+	viz.boxplotData();
+    viz.boardplotData();
+    
+	viz.plotCosts();
+    viz.plotROC();
+    % viz.plotErrors(@(u, v) corr(u, v));
+    viz.plotCorr();
+    
     viz.plotParameters();
+    
     viz.plotExpectedActualOutputs();
+    viz.plotExpectedActualOutputsOverall();
     
     % viz.playFilterVideo();
+    
+    viz.saveData();
     
     close('all');
 end
