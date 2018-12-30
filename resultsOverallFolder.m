@@ -23,6 +23,7 @@ for folder = folders
     viz.boardplotData();
     
 	viz.plotCosts();
+    viz.plotROC();
     % viz.plotErrors(@(u, v) corr(u, v));
     viz.plotCorr();
     
