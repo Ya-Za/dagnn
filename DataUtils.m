@@ -137,7 +137,7 @@ classdef DataUtils < handle
             % remove residual elements(mod(lenght(input), m) == 0)
             input = input(1 : m * l);
             % divide
-            output = divide_to_subvectors(input, l, l);
+            output = DataUtils.divide_to_subvectors(input, l, l);
         end
         function output = downsample_vector(input, m)
             %DOWNSAMPLE_VECTOR donwsample 'input' to 'output' with length 'm'
