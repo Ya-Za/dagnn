@@ -167,8 +167,8 @@ classdef Viz < handle
             obj.initDag();
             obj.initFigDir();
             
-            % obj.initCorr();
-            obj.corr = obj.costs;
+            obj.initCorr();
+            % obj.corr = obj.costs;
         end
         function initNumOfEpochs(obj)
             epochsDir = fullfile(obj.path, Path.EPOCHS_DIR);
