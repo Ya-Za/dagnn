@@ -167,7 +167,8 @@ classdef Viz < handle
             obj.initDag();
             obj.initFigDir();
             
-            obj.initCorr();
+            % obj.initCorr();
+            obj.corr = obj.costs;
         end
         function initNumOfEpochs(obj)
             epochsDir = fullfile(obj.path, Path.EPOCHS_DIR);
@@ -635,7 +636,10 @@ classdef Viz < handle
                     % scalar
                     imagesc(obj.Y{indexes(i)}, [0, 1]);
                     colormap(gca, 'gray');
-                    set(gca, 'Visible', 'off');
+                    
+                    % set(gca, 'Visible', 'off');
+                    Viz.hideticks();
+                    box('on');
                 else
                     % vector
                     plot(obj.Y{indexes(i)}, 'Color', Viz.RESP_COLOR);
@@ -1237,6 +1241,81 @@ classdef Viz < handle
                     legend('Training', 'Validation', 'Test');
                 end
             end
+        end
+        function plotROC(obj)
+            % Properties
+            lineWidth = 2;
+            
+            % figure
+            Viz.figure('CNN - ROC [Training, Validation, Test]');
+            
+            % find min val cost epoch and take the model to it
+            [~, epoch] = min(obj.costs.val);
+            obj.dag.load_epoch(epoch);
+            
+            % train 
+            labels = obj.Y(obj.dataIndexes.train);
+            labels = [labels{:}]';
+            labels = logical(labels);
+            scores = obj.dag.out(obj.X(obj.dataIndexes.train));
+            scores = [scores{:}]';
+            
+            [x, y, ~, AUC] = perfcurve(...
+                labels, ...
+                scores, ...
+                true ...
+            );
+            plot(x, y, ...
+                'DisplayName', sprintf('Training: (%g)', AUC), ...
+                'LineWidth', lineWidth, ...
+                'Color', Viz.TRAIN_COLOR ...
+            );
+            hold('on');
+            
+            % val
+            labels = obj.Y(obj.dataIndexes.val);
+            labels = [labels{:}]';
+            labels = logical(labels);
+            scores = obj.dag.out(obj.X(obj.dataIndexes.val));
+            scores = [scores{:}]';[x, y, ~, AUC] = perfcurve(...
+                labels, ...
+                scores, ...
+                true ...
+            );
+        
+            plot(x, y, ...
+                'DisplayName', sprintf('Validation: (%g)', AUC), ...
+                'LineWidth', lineWidth, ...
+                'Color', Viz.VAL_COLOR ...
+            );
+        
+            % test
+            labels = obj.Y(obj.dataIndexes.test);
+            labels = [labels{:}]';
+            labels = logical(labels);
+            scores = obj.dag.out(obj.X(obj.dataIndexes.test));
+            scores = [scores{:}]';
+            
+            [x, y, ~, AUC] = perfcurve(...
+                labels, ...
+                scores, ...
+                1 ...
+            );
+            plot(x, y, ...
+                'DisplayName', sprintf('Test: (%g)', AUC), ...
+                'LineWidth', lineWidth, ...
+                'Color', Viz.TEST_COLOR ...
+            );        
+            hold('off');
+            
+            % axes
+            legend();
+            xlabel('False positive rate');
+            ylabel('True positive rate');
+            title('Receiver Operating Characteristic (ROC)');
+            
+            % save
+            obj.saveFigure('roc');
         end
     end
     
@@ -2065,7 +2144,9 @@ classdef Viz < handle
                     % scalar
                     imagesc([obj.Y{sampleIndex}, Y_{sampleIndex}], [0, 1]);
                     colormap(gca, 'gray');
-                    set(gca, 'Visible', 'off');
+                    % set(gca, 'Visible', 'off');
+                    Viz.hideticks();
+                    box('on');
                 else
                     % vector
                     plot(obj.Y{sampleIndex});
