@@ -11,6 +11,8 @@ folders = folders([folders.isdir]);
 folders = folders(3:end)';
 
 for folder = folders
+    tic();
+    
     disp(folder.name);
     
     path = fullfile(folder.folder, folder.name);
@@ -37,4 +39,6 @@ for folder = folders
     viz.saveData();
     
     close('all');
+    
+    toc();
 end
