@@ -88,6 +88,12 @@ classdef Viz < handle
         %       'test', double vector ...
         %   )
         %   Contains 'train', 'val' and 'test' costs
+        % - corr: struct(...
+        %       'train', double vector, ...
+        %       'val', double vector, ...
+        %       'test', double vector ...
+        %   )
+        %   Contains 'train', 'val' and 'test' correlation
         % - paramNames: cell array
         %   Name of parameters
         % - filterNames: cell array
@@ -115,6 +121,7 @@ classdef Viz < handle
         learningParams
         dataIndexes
         costs
+        corr
         paramNames
         filterNames
         biasNames
@@ -159,6 +166,9 @@ classdef Viz < handle
             obj.initParams();
             obj.initDag();
             obj.initFigDir();
+            
+            % obj.initCorr();
+            obj.corr = obj.costs;
         end
         function initNumOfEpochs(obj)
             epochsDir = fullfile(obj.path, Path.EPOCHS_DIR);
@@ -318,6 +328,12 @@ classdef Viz < handle
             if ~exist(folder, 'dir')
                 mkdir(folder)
             end
+        end
+        function initCorr(obj)
+            [train, val, test] = obj.error(@(u, v) corr(u, v));
+            obj.corr.train = train;
+            obj.corr.val = val;
+            obj.corr.test = test;
         end
     end
     
@@ -594,7 +610,11 @@ classdef Viz < handle
                 n = (rows * cols) / 2;
             end
             function setAxis()
-                axis(limits);
+                try
+                    axis(limits);
+                catch
+                end
+                
                 set(gca, 'XAxisLocation', 'origin');
                 Viz.hideticks();
                 
@@ -611,9 +631,20 @@ classdef Viz < handle
             end
             function plotResponse(i)
                 subplot(rows, cols, 2 * i);
-                plot(obj.Y{indexes(i)}, 'Color', Viz.RESP_COLOR);
                 
-                setAxis();
+                if length(obj.Y{indexes(i)}) == 1
+                    % scalar
+                    imagesc(obj.Y{indexes(i)}, [0, 1]);
+                    colormap(gca, 'gray');
+                    
+                    % set(gca, 'Visible', 'off');
+                    Viz.hideticks();
+                    box('on');
+                else
+                    % vector
+                    plot(obj.Y{indexes(i)}, 'Color', Viz.RESP_COLOR);
+                    setAxis();
+                end
             end
             function plotFirstStimulus()
                 plotStimulus(1);
@@ -631,11 +662,18 @@ classdef Viz < handle
                 plotResponse(1);
                 
                 title(Viz.RESP_TITLE);
-                xlabel(Viz.XLABEL);
-                ylabel(Viz.RESP_YLABEL);
-                
                 ax = gca;
-                ax.YAxis.Visible = 'on';
+                
+                if length(obj.Y{indexes(1)}) == 1
+                    ax.Visible = 'on';
+                    ax.XAxis.Visible = 'off';
+                    ax.YAxis.Visible = 'off';
+                else
+                    xlabel(Viz.XLABEL);
+                    ylabel(Viz.RESP_YLABEL);
+                    
+                    ax.YAxis.Visible = 'on';
+                end
                 
                 setTinyFontSize();
             end
@@ -741,6 +779,9 @@ classdef Viz < handle
             
             % title
             suptitle('Box Plot of Data (Stimulus, Response)');
+            
+            % save
+            obj.saveFigure('box');
         end
         function boardplotData(obj)
             % Board plot of data
@@ -792,6 +833,9 @@ classdef Viz < handle
                 'Location', 'southoutside', ...
                 'Ticks', [] ...
             );
+        
+            % save
+            obj.saveFigure('board');
         end
     end
     
@@ -1024,12 +1068,21 @@ classdef Viz < handle
                     obj.dag.load_epoch(epoch);
                     y_ = obj.dag.out(x);
                     
-                    err(epoch) = mean(...
-                        arrayfun(...
-                            @(i) d(y{i}, y_{i}), ...
-                            1:length(x)...
-                        )...
-                    );
+                    if length(y_{1}) == 1
+                        err(epoch) = d([y{:}]', [y_{:}]');
+                    else
+                        err(epoch) = mean(...
+                            arrayfun(...
+                                @(i) d(y{i}, y_{i}), ...
+                                1:length(x)...
+                            )...
+                        );
+                    end
+                
+                    % NaN -> 0
+                    if isnan(err(epoch))
+                        err(epoch) = 0;
+                    end
                 end
             end
         end
@@ -1109,6 +1162,160 @@ classdef Viz < handle
                     legend('Training', 'Validation', 'Test');
                 end
             end
+        end
+        function plotCorr(obj)
+            % Properties
+            lineWidth = 2;
+            yScale = 'linear';
+            
+            train = obj.corr.train;
+            val = obj.corr.val;
+            test = obj.corr.test;
+            epochs = 0:(length(train) - 1);
+            
+            plotTrainValTestErrors();
+            setAxes();
+            
+            % save
+            obj.saveFigure('corr');
+            
+            % Local Functions
+            function plotTrainValTestErrors()
+                % figure
+                Viz.figure('CNN - Errors [Training, Validation, Test]');
+                % - train
+                plot(epochs, train, ...
+                    'LineWidth', lineWidth, ...
+                    'Color', Viz.TRAIN_COLOR ...
+                );
+                set(gca, 'YScale', yScale);
+                hold('on');
+                % - validation
+                plot(epochs, val, ...
+                    'LineWidth', lineWidth, ...
+                    'Color', Viz.VAL_COLOR ...
+                );
+                % - test
+                plot(epochs, test, ...
+                    'LineWidth', lineWidth, ...
+                    'Color', Viz.TEST_COLOR ...
+                );
+                hold('off');
+            end
+            function setAxes()
+                setTicks();
+                % setAxesLocations();
+                setLabels();
+                setTitle();
+                setLegend();
+                grid('on');
+                box('off');
+                
+                % Local Functions
+                function setTicks()
+                    % ticks
+                    % - x
+                    set(gca, ...
+                        'XTick', unique([0, epochs(end)]) ...
+                    );
+                    % - y
+%                     set(gca, ...
+%                         'YTick', ...
+%                         unique(sort([...
+%                             0, ...
+%                             max([train, val, test]) ...
+%                         ])) ...
+%                     );
+                end
+                function setLabels()
+                    % labels
+                    xlabel('Epoch');
+                    % ylabel('Corr');
+                end
+                function setTitle()
+                    % title
+                    title('Linear Correlation');
+                end
+                function setLegend()
+                    % legend
+                    legend('Training', 'Validation', 'Test');
+                end
+            end
+        end
+        function plotROC(obj)
+            % Properties
+            lineWidth = 2;
+            
+            % figure
+            Viz.figure('CNN - ROC [Training, Validation, Test]');
+            
+            % find min val cost epoch and take the model to it
+            [~, epoch] = min(obj.costs.val);
+            obj.dag.load_epoch(epoch);
+            
+            % train 
+            labels = obj.Y(obj.dataIndexes.train);
+            labels = [labels{:}]';
+            labels = logical(labels);
+            scores = obj.dag.out(obj.X(obj.dataIndexes.train));
+            scores = [scores{:}]';
+            
+            [x, y, ~, AUC] = perfcurve(...
+                labels, ...
+                scores, ...
+                true ...
+            );
+            plot(x, y, ...
+                'DisplayName', sprintf('Training: (%g)', AUC), ...
+                'LineWidth', lineWidth, ...
+                'Color', Viz.TRAIN_COLOR ...
+            );
+            hold('on');
+            
+            % val
+            labels = obj.Y(obj.dataIndexes.val);
+            labels = [labels{:}]';
+            labels = logical(labels);
+            scores = obj.dag.out(obj.X(obj.dataIndexes.val));
+            scores = [scores{:}]';[x, y, ~, AUC] = perfcurve(...
+                labels, ...
+                scores, ...
+                true ...
+            );
+        
+            plot(x, y, ...
+                'DisplayName', sprintf('Validation: (%g)', AUC), ...
+                'LineWidth', lineWidth, ...
+                'Color', Viz.VAL_COLOR ...
+            );
+        
+            % test
+            labels = obj.Y(obj.dataIndexes.test);
+            labels = [labels{:}]';
+            labels = logical(labels);
+            scores = obj.dag.out(obj.X(obj.dataIndexes.test));
+            scores = [scores{:}]';
+            
+            [x, y, ~, AUC] = perfcurve(...
+                labels, ...
+                scores, ...
+                1 ...
+            );
+            plot(x, y, ...
+                'DisplayName', sprintf('Test: (%g)', AUC), ...
+                'LineWidth', lineWidth, ...
+                'Color', Viz.TEST_COLOR ...
+            );        
+            hold('off');
+            
+            % axes
+            legend();
+            xlabel('False positive rate');
+            ylabel('True positive rate');
+            title('Receiver Operating Characteristic (ROC)');
+            
+            % save
+            obj.saveFigure('roc');
         end
     end
     
@@ -1251,7 +1458,7 @@ classdef Viz < handle
                 [filterName, '.mp4'] ...
             );
         end
-        function plotFilter(obj, filterName)
+        function plotFilterOldOld(obj, filterName)
             
             % plot for all filters
             if ~exist('filterName', 'var')
@@ -1335,6 +1542,233 @@ classdef Viz < handle
                     % legend
                     lgd = legend('show');
                     lgd.Location = 'southwest';
+                    lgd.Box = 'off';
+                end
+            end
+            function setTitle()
+                title(sprintf(...
+                    'Filter %s - Minimum Validation Error is %g in Epoch #%d', ...
+                    filterName, ...
+                    obj.params.(filterName).minValCost.value, ...
+                    obj.params.(filterName).minValCost.index - 1 ...
+                ));
+            end
+        end
+        function plotFilterOld(obj, filterName)
+            
+            % plot for all filters
+            if ~exist('filterName', 'var')
+                plotFilterAll();
+
+                return;
+            end
+            
+            % Parameters
+            lineWidth = 2;
+            
+            colors = makeColors(5);
+            
+            filterInitialColor = colors(1, :);
+            filterEpochOneThirdColor = colors(2, :);
+            filterEpochTwoThirdColor = colors(3, :);
+            filterMinErrorColor = colors(4, :);
+            filterExpectedColor = colors(5, :);
+            
+            limits = obj.getFilterLimits(filterName);
+            
+            [~, index] = min(obj.costs.val);
+            
+            Viz.figure(sprintf('Filter: %s', filterName));
+            
+            plotFilterInitial();
+            hold('on');
+            plotFilterEpochOneThird();
+            plotFilterEpochTwoThird();
+            plotFilterMinError();
+            plotFilterExpected();
+            hold('off');
+            
+            setAxes()
+            setTitle();
+            
+            % save
+            obj.saveFigure(filterName);
+            
+            % Local Functions
+            function plotFilterAll()
+                for i = 1:length(obj.filterNames)
+                    filterName = obj.filterNames{i};
+                    obj.plotFilter(filterName);
+                end
+            end
+            function plotFilterInitial()
+                plot(obj.params.(filterName).initial, ...
+                    'DisplayName', 'Initial value', ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterInitialColor ...
+                );
+            end
+            function plotFilterEpochOneThird()
+                oneThird = ceil(index * (1/3));
+                plot(obj.params.(filterName).history{oneThird}, ...
+                    'DisplayName', sprintf('One Third (#%d)', oneThird - 1), ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterEpochOneThirdColor ...
+                );
+            end
+            function plotFilterEpochTwoThird()
+                twoThird = ceil(index * (2/3));
+                plot(obj.params.(filterName).history{twoThird}, ...
+                    'DisplayName', sprintf('Two Third (#%d)', twoThird - 1), ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterEpochTwoThirdColor ...
+                );
+            end
+            function plotFilterMinError()
+                plot(obj.params.(filterName).history{index}, ...
+                    'DisplayName', sprintf('Min Val Error (#%d)', index - 1), ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterMinErrorColor ...
+                );
+            end
+            function plotFilterExpected()
+                plot(obj.params.(filterName).expected, ...
+                    'DisplayName', 'Expected', ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterExpectedColor ...
+                );
+            end
+            function setAxes()
+                setTicks();
+                % setAxesLocations();
+                % setLabels();
+                setLegend();
+                grid('on');
+                box('off');
+                
+                % Local Functions
+                function setTicks()
+                    axis(limits);
+                    set(gca, 'XTick', limits(1:2));
+                    set(gca, 'YTick', unique(sort([limits(3), 0, limits(4)])));
+                end
+                function setAxesLocations()
+                    set(gca, 'XAxisLocation', 'origin');
+                    set(gca, 'YAxisLocation', 'origin');
+                end
+                function setLabels()
+                    xlabel('#');
+                    ylabel('Intensity');
+                end
+                function setLegend()
+                    % legend
+                    lgd = legend('show');
+                    lgd.Location = 'southwest';
+                    lgd.Box = 'off';
+                end
+            end
+            function setTitle()
+                title(sprintf(...
+                    'Filter %s - Minimum Validation Error is %g in Epoch #%d', ...
+                    filterName, ...
+                    obj.params.(filterName).minValCost.value, ...
+                    obj.params.(filterName).minValCost.index - 1 ...
+                ));
+            end
+            function colors = makeColors(n)
+                colors = zeros(n, 3);
+                
+                map = summer;
+                m = length(map);
+                
+                for i = 1:n
+                    j = ceil((i / n) * m);
+                    colors(i, :) = map(j, :);
+                end
+            end
+        end
+        function plotFilter(obj, filterName)
+            
+            % plot for all filters
+            if ~exist('filterName', 'var')
+                plotFilterAll();
+
+                return;
+            end
+            
+            % Parameters
+            lineWidth = 2;
+            filterExpectedColor = [0.4286, 0.4286, 0.4286];
+            filterInitialColor = [0.9290, 0.6940, 0.1250];
+            filterMinErrorColor = [0.4940, 0.1840, 0.5560];
+            
+            Viz.figure(sprintf('Filter: %s', filterName));
+            
+            plotFilterExpected();
+            hold('on');
+            plotFilterInitial();
+            plotFilterMinError();
+            setAxes()
+            setTitle();
+            
+            % save
+            obj.saveFigure([filterName, '-new']);
+            
+            % Local Functions
+            function plotFilterAll()
+                for i = 1:length(obj.filterNames)
+                    filterName = obj.filterNames{i};
+                    obj.plotFilter(filterName);
+                end
+            end
+            function plotFilterExpected()
+                plot(flip(obj.params.(filterName).expected), ...
+                    'DisplayName', 'Ground truth', ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterExpectedColor ...
+                );
+            end
+            function plotFilterInitial()
+                plot(flip(obj.params.(filterName).initial), ...
+                    'DisplayName', 'Initial value', ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterInitialColor ...
+                );
+            end
+            function plotFilterMinError()
+                [~, index] = min(obj.costs.val);
+                plot(flip(obj.params.(filterName).history{index}), ...
+                    'DisplayName', sprintf('Min Val Error (#%d)', index - 1), ...
+                    'LineWidth', lineWidth, ...
+                    'Color', filterMinErrorColor ...
+                );
+            end
+            function setAxes()
+                setTicks();
+                % setAxesLocations();
+                % setLabels();
+                setLegend();
+                grid('on');
+                box('off');
+                
+                % Local Functions
+                function setTicks()
+                    axis('tight');
+                    set(gca, 'XTick', []);
+                    set(gca, 'YTick', []);
+                end
+                function setAxesLocations()
+                    set(gca, 'XAxisLocation', 'origin');
+                    set(gca, 'YAxisLocation', 'origin');
+                end
+                function setLabels()
+                    xlabel('#');
+                    ylabel('Intensity');
+                end
+                function setLegend()
+                    % legend
+                    lgd = legend('show');
+                    lgd.Location = 'northeast';
                     lgd.Box = 'off';
                 end
             end
@@ -1702,14 +2136,27 @@ classdef Viz < handle
             
             for index = 1 : numberOfSamples
                 sampleIndex = indexes(index);
+                
                 % sample
                 subplot(rows, cols, index);
-                plot(obj.Y{sampleIndex});
-                hold('on');
-                plot(Y_{sampleIndex});
-                hold('off');
                 
-                setAxis();
+                if length(obj.Y{sampleIndex}) == 1
+                    % scalar
+                    imagesc([obj.Y{sampleIndex}, Y_{sampleIndex}], [0, 1]);
+                    colormap(gca, 'gray');
+                    % set(gca, 'Visible', 'off');
+                    Viz.hideticks();
+                    box('on');
+                else
+                    % vector
+                    plot(obj.Y{sampleIndex});
+                    hold('on');
+                    plot(Y_{sampleIndex});
+                    hold('off');
+
+                    setAxis();
+                end
+                
                 showTitle(sampleIndex);
                 
                 waitbar(index / numberOfSamples)
@@ -1738,7 +2185,10 @@ classdef Viz < handle
                 rows = ceil(n / cols);
             end
             function setAxis()
-                axis(limits);
+                try
+                    axis(limits);
+                catch
+                end
                 
                 ax = gca;
                 ax.XAxisLocation = 'origin';
@@ -1749,6 +2199,78 @@ classdef Viz < handle
             function showTitle(i)
                 title(num2str(i));
                 set(gca, 'FontSize', fontsize);
+            end
+        end
+        function plotExpectedActualOutputsOverall(obj, epoch)
+            % Plot expected/actual responses for a given epoch
+            %
+            % Parameters
+            % ----------
+            % - epoch: number
+            %   Target epoch
+            
+            % plot for epoch with min validation cost
+            if ~exist('epoch', 'var')
+                [~, epoch] = min(obj.costs.val);
+            end
+            
+            % actual response
+            obj.dag.load_epoch(epoch);
+            Y_ = obj.dag.out(obj.X);
+            
+            % train, val, test indexes
+            idx = cell(3, 1);
+            idx{1} = obj.dataIndexes.train;
+            idx{2} = obj.dataIndexes.val;
+            idx{3} = obj.dataIndexes.test;
+            
+            % properties
+            titles = {'Training', 'Validation', 'Test'};
+            names = {'train', 'val', 'test'};
+            expectedColor = 'black';
+            colors = [Viz.TRAIN_COLOR; Viz.VAL_COLOR; Viz.TEST_COLOR];
+            
+            % figure
+            Viz.figure(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch - 1));
+            
+            % plot
+            for i = 1:3
+                y = concat(obj.Y(idx{i}));
+                y_ = concat(Y_(idx{i}));
+                
+                subplot(3, 1, i);
+                
+                plot(y, ...
+                    'DisplayName', 'Expected', ...
+                    'Color', expectedColor ...
+                );
+                hold('on');
+                
+                plot(y_, ...
+                    'DisplayName', 'Actual', ...
+                    'Color', colors(i, :) ...
+                );
+                hold('off');
+                
+                legend('show');
+                title(...
+                    sprintf('%s (mse: %g, corr: %g)', ...
+                        titles{i}, ...
+                        obj.costs.(names{i})(epoch), ...
+                        obj.corr.(names{i})(epoch) ...
+                    ) ...
+                );
+            end
+            
+            % super-title
+            suptitle(sprintf('Expected vs. Actual Responses for Epoch #%d', epoch - 1));
+            
+            % save
+            obj.saveFigure('prediction-overall');
+            
+            % Local Functions
+            function X = concat(x)
+                X = vertcat(x{:});
             end
         end
     end
@@ -1774,26 +2296,86 @@ classdef Viz < handle
                 Viz.FORMATTYPE ...
             );
         end
-        function saveData(obj, filename)
-            % data
-            data = struct();
-            % x
-            data.x = obj.X;
-            % y
-            data.y = obj.Y;
-            % y_
+        function saveData(obj)
+            % go to best epoch
             [~, epoch] = min(obj.costs.val);
             obj.dag.load_epoch(epoch);
-            data.y_ = obj.dag.out(obj.X);
+            Y_ = obj.dag.out(obj.X);
+            
+            % train, val, test indexes
+            idxTrain = obj.dataIndexes.train;
+            idxVal = obj.dataIndexes.val;
+            idxTest = obj.dataIndexes.test;
+            
+            % data
+            data = struct();
+            
+            % indexes (train, val, test)
+            data.idx.train = idxTrain;
+            data.idx.val = idxVal;
+            data.idx.test = idxTest;
+            
+            
+            % - all
+            data.x = obj.X;
+            data.y = obj.Y;
+            data.y_ = Y_;
+            
+            data.X = concat(data.x);
+            data.Y = concat(data.y);
+            data.Y_ = concat(data.y_);
+            
+            % - train
+            data.train.x = obj.X(idxTrain);
+            data.train.y = obj.Y(idxTrain);
+            data.train.y_ = Y_(idxTrain);
+            
+            data.train.X = concat(data.train.x);
+            data.train.Y = concat(data.train.y);
+            data.train.Y_ = concat(data.train.y_);
+            
+            % - val
+            data.val.x = obj.X(idxVal);
+            data.val.y = obj.Y(idxVal);
+            data.val.y_ = Y_(idxVal);
+            
+            data.val.X = concat(data.val.x);
+            data.val.Y = concat(data.val.y);
+            data.val.Y_ = concat(data.val.y_);
+            
+            % - test
+            data.test.x = obj.X(idxTest);
+            data.test.y = obj.Y(idxTest);
+            data.test.y_ = Y_(idxTest);
+            
+            data.test.X = concat(data.test.x);
+            data.test.Y = concat(data.test.y);
+            data.test.Y_ = concat(data.test.y_);
+            
             % params
+            % - all
+            data.params = obj.params;
+            % - best
             names = fieldnames(obj.params);
             for i = 1:length(names)
                 name = names{i};
                 data.(name) = obj.params.(name).history{epoch};
             end
             
+            % errors
+            % - mse
+            data.mse = obj.costs;
+            % - corr
+            data.corr = obj.corr;
+            
             % save
+            filename = fullfile(obj.path, 'overall');
             save(filename, '-struct', 'data');
+            
+            % Local Functions
+            function X = concat(x)
+                X = vertcat(x{:});
+            end
         end
     end
     methods (Static)
