@@ -33,7 +33,7 @@ classdef DagNNNoisy < handle
             
             obj.noisy_configs_dir = noisy_configs_dir;
             
-            obj.snr = [-1];
+            obj.snr = [Inf];
         end
     end
     
